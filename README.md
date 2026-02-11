@@ -4,3 +4,4 @@ Repository for Open Source & Professional Software Development CS-GY 9223
 - Aditya Jha (aj4955)
 - Pragya Awasthi (pa2755)
 - Gurjeet Kaur (gk2845)
+- Chloe Lee (hl6181)
