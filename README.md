@@ -5,3 +5,4 @@ Repository for Open Source & Professional Software Development CS-GY 9223
 - Pragya Awasthi (pa2755)
 - Gurjeet Kaur (gk2845)
 - Chloe Lee (hl6181)
+- Yusuke Katsuki (yk3183)
