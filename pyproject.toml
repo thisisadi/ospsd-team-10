@@ -35,6 +35,9 @@ members = [
   "src/cloud_storage_client_api",
   "src/s3_client_impl",
 ]
+[tool.uv.sources]
+cloud-storage-client-api = { workspace = true }
+s3-client-impl = { workspace = true }
 
 [tool.ruff]
 line-length = 130 # high for top level due to tests
