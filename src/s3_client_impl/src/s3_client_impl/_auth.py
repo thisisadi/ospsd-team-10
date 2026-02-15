@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+_MISSING_S3_BUCKET_MSG = "Missing required env var: S3_BUCKET"
 
 class MissingCredentialsError(RuntimeError):
     """Raised when required environment variables are missing."""
@@ -15,8 +16,7 @@ class S3Config:
 
 
 def load_s3_config_from_env() -> S3Config:
-    """
-    Load S3 configuration from environment variables.
+    """Load S3 configuration from environment variables.
 
     Required:
       - S3_BUCKET
@@ -26,7 +26,7 @@ def load_s3_config_from_env() -> S3Config:
     """
     bucket = os.environ.get("S3_BUCKET")
     if not bucket:
-        raise MissingCredentialsError("Missing required env var: S3_BUCKET")
+        raise MissingCredentialsError(_MISSING_S3_BUCKET_MSG)
 
     region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
 
