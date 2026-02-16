@@ -1,9 +1,7 @@
 import inspect
 
 import pytest
-
-from cloud_storage_client_api.client import CloudStorageClient
-from cloud_storage_client_api.client import get_client
+from cloud_storage_client_api.client import CloudStorageClient, get_client
 
 
 def test_interface_is_abstract():

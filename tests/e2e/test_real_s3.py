@@ -3,7 +3,6 @@ import tempfile
 import uuid
 
 import pytest
-
 from cloud_storage_client_api.client import get_client
 
 
@@ -41,7 +40,7 @@ def test_real_s3_flow():
         # delete remote file
         try:
             client.delete_file(remote_path)
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
 
         # cleanup local files

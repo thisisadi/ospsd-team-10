@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+
 import pytest
 from cloud_storage_client_aws_impl.client import S3CloudStorageClient
 
@@ -31,7 +32,7 @@ def test_upload_file_calls_s3(mock_boto_client):
     client.upload_file("local.txt", "remote.txt")
 
     mock_s3.upload_file.assert_called_once_with(
-        "local.txt", "test-bucket", "remote.txt"
+        "local.txt", "test-bucket", "remote.txt",
     )
 
 
@@ -48,7 +49,7 @@ def test_download_file_calls_s3(mock_boto_client):
     client.download_file("remote.txt", "local.txt")
 
     mock_s3.download_file.assert_called_once_with(
-        "test-bucket", "remote.txt", "local.txt"
+        "test-bucket", "remote.txt", "local.txt",
     )
 
 
@@ -82,7 +83,7 @@ def test_list_files_returns_keys(mock_boto_client):
         "Contents": [
             {"Key": "file1.txt"},
             {"Key": "file2.txt"},
-        ]
+        ],
     }
 
     client = S3CloudStorageClient(bucket_name="test-bucket")
