@@ -1,54 +1,23 @@
-[project]
-name = "cloud-storage-client"
-version = "0.1.0"
-description = "Component-based Cloud Storage client (AWS S3 implementation)"
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = []
-
-[project.optional-dependencies]
-dev = [
-    # Docs
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.6.15",
-    "mkdocstrings-python>=1.16.12",
-    "pymdown-extensions>=10.16.1",
-
-    # Quality / Type checking
-    "mypy>=1.17.0",
-    "ruff>=0.12.7",
-    "types-requests>=2.32.4.20250611",
-
-    # Testing / Coverage
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
-    "coverage>=7",
-
-    # AWS typing stubs (for mypy)
-    # Use one of these depending on your preference; boto3-stubs is the most complete.
-    "boto3-stubs[s3]>=1.34.0",
-    "types-aiobotocore[s3]>=2.13.0",
-]
-
 [tool.uv.workspace]
 members = [
-  "src/cloud_storage_client_api",
-  "src/s3_client_impl",
+  "components/cloud_storage_client_api",
+  "components/s3_client_impl",
 ]
+
 [tool.uv.sources]
 cloud-storage-client-api = { workspace = true }
 s3-client-impl = { workspace = true }
 
 [tool.ruff]
-line-length = 130 # high for top level due to tests
+line-length = 130
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "D203", # incompatible with D211
-  "D213", # incompatible with D212
-  "S101", # asserts are fine (especially in tests)
+  "D203",
+  "D213",
+  "S101",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -68,12 +37,14 @@ ignore = [
 
 [tool.mypy]
 strict = true
-explicit_package_bases = true # Required for src layout
-mypy_path = ["src/cloud_storage_client_api/src", "src/s3_client_impl/src"]
+explicit_package_bases = true
+mypy_path = [
+    "components/cloud_storage_client_api/src",
+    "components/s3_client_impl/src",
+]
 ignore_missing_imports = false
 warn_unused_ignores = false
 
-# Allow untyped imports for specific modules (AWS SDKs can be noisy without stubs)
 [[tool.mypy.overrides]]
 module = [
     "boto3.*",
@@ -83,11 +54,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-pythonpath = [
-    ".",
-    "src"
-]
-testpaths = ["tests", "src/*/tests"]
+testpaths = ["tests", "components/*/tests"]
 addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
@@ -98,13 +65,21 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["components"]
 omit = ["*/tests/*", "*/__main__.py"]
 
 [tool.coverage.report]
-fail_under = 85 # Justification: A high threshold ensures most code is tested.
+fail_under = 85
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.1",
 ]

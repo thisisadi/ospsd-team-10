@@ -64,7 +64,7 @@ jobs:
           name: MyPy (strict)
           command: |
             source .venv/bin/activate
-            mypy src tests
+            mypy components tests
 
   test_unit_integration:
     docker:
@@ -84,9 +84,9 @@ jobs:
           command: |
             source .venv/bin/activate
             # Runs everything except e2e by default
-            pytest src/ tests/ -m "not e2e" \
+            pytest components/ tests/ -m "not e2e" \
               --junitxml=test-results/unit_integration/junit.xml -v \
-              --cov=src \
+              --cov=components \
               --cov-report=term-missing \
               --cov-report=xml:coverage-reports/coverage.xml \
               --cov-report=html:coverage-reports/html
@@ -124,7 +124,7 @@ jobs:
             # but for most setups you’ll provide keys in env vars.
             if [ -n "${AWS_S3_BUCKET}" ] && [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
               echo "AWS env vars detected. Running e2e tests..."
-              pytest src/ tests/ -m "e2e" \
+              pytest components/ tests/ -m "e2e" \
                 --junitxml=test-results/e2e/junit.xml -v \
                 --no-cov
             else

@@ -37,8 +37,8 @@ plugins:
           options:
             # This helps mkdocstrings find packages in the src directory
             search_paths:
-              - src/cloud_storage_client_api/src
-              - src/s3_client_impl/src
+              - components/cloud_storage_client_api/src
+              - components/s3_client_impl/src
             show_source: false
             docstring_section_style: spacy
             members_order: source

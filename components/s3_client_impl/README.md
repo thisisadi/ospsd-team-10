@@ -66,25 +66,6 @@ This ensures:
 
 ---
 
-## Testing
-
-Tests implemented:
-- Unit tests using fake S3 client  
-- DI smoke tests  
-- Auth configuration tests  
-
-Run:
-uv run pytest
-
-Result:
-6 passed  
-Coverage ≈ 91%
-
-Coverage requirement: 85%  
-Status: PASSED
-
----
-
 ## Static Analysis Compliance
 
 All required tools are enabled and passing.
