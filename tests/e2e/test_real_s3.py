@@ -14,7 +14,7 @@ def test_real_s3_flow() -> None:
 
     client = get_client()
 
-    container = "test-bucket"  # or use env-configured bucket
+    container = os.environ["AWS_S3_BUCKET"]
     object_name = f"test-object-{uuid.uuid4()}.txt"
     data = b"hello world"
 

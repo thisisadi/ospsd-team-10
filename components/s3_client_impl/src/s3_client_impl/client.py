@@ -23,10 +23,10 @@ class _BodyLike(Protocol):
 class _S3Like(Protocol):
     """Minimal protocol for the S3 SDK client we call."""
 
-    def put_object(self, *, Bucket: str, Key: str, Body: bytes) -> object: ... # noqa: N803
-    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ... # noqa: N803
-    def delete_object(self, *, Bucket: str, Key: str) -> object: ... # noqa: N803
-    def list_objects_v2(self, *, Bucket: str) -> dict[str, object]: ... # noqa: N803
+    def put_object(self, *, Bucket: str, Key: str, Body: bytes) -> object: ...  # noqa: N803
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...  # noqa: N803
+    def delete_object(self, *, Bucket: str, Key: str) -> object: ...  # noqa: N803
+    def list_objects_v2(self, *, Bucket: str) -> dict[str, object]: ...  # noqa: N803
 
 
 @dataclass(frozen=True)
