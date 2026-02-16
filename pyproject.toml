@@ -54,7 +54,27 @@ ignore = [
   "D213", # incompatible with D212
   "S101", # asserts are fine (especially in tests)
 ]
-per-file-ignores = { "**/test_*.py" = ["TRY300", "BLE001", "ANN401", "SLF001", "E501", "S105", "ARG001", "ARG002", "S106", "INP001", "PLC0415"] }
+
+per-file-ignores = { 
+  "**/test_*.py" = [
+    # Tests are intentionally less strict:
+    # - Docstrings are unnecessary for test functions
+    # - Type annotations add noise to pytest tests
+    # - Path and magic value rules reduce readability in tests
+    # These exceptions are limited only to test files.
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "ANN001",
+    "ANN201",
+    "PLR2004",
+    "PTH110",
+    "PTH107",
+    "SIM105",
+    "S110"
+  ]
+}
 
 [tool.mypy]
 strict = true
