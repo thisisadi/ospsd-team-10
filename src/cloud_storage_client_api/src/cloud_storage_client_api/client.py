@@ -9,7 +9,6 @@ __all__ = ["Client", "get_client", "register_client"]
 # Internal variable to hold the registered client implementation
 _registered_client: Optional["Client"] = None
 
-
 class Client(ABC):
     """Defines the common operations that any cloud storage client should support."""
 
@@ -49,22 +48,21 @@ class Client(ABC):
         """Return the names of all objects stored in a container."""
         raise NotImplementedError
 
-
 def register_client(client: Client) -> None:
-    """Register a concrete client implementation for Dependency Injection.
-
+    """
+    Register a concrete client implementation for Dependency Injection.
+    
     When imported, your implementation should call this function to "inject" itself.
     """
     global _registered_client
     _registered_client = client
 
-
 def get_client(*, interactive: bool = False) -> Client:
-    """Return the registered cloud storage client instance.
+    """
+    Return the registered cloud storage client instance.
 
     Raises:
         RuntimeError: if no client has been registered yet.
-
     """
     if _registered_client is None:
         raise RuntimeError("No cloud client registered. Did you import an implementation?")
