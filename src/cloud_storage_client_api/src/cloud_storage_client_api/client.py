@@ -1,69 +1,61 @@
 """Basic cloud storage client interface and factory definition with DI support."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
-from typing import Optional
+from typing import TYPE_CHECKING
 
-__all__ = ["Client", "get_client", "register_client"]
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
-# Internal variable to hold the registered client implementation
-_registered_client: Optional["Client"] = None
+_NO_CLIENT_MSG = "No cloud client registered. Did you import an implementation?"
+
+# Use a mutable container to avoid `global` assignment lint (PLW0603).
+_registered_factory: list[Callable[[], Client] | None] = [None]
+
 
 class Client(ABC):
     """Defines the common operations that any cloud storage client should support."""
 
     @abstractmethod
-    def upload_object(
-        self,
-        container_name: str,
-        object_name: str,
-        data: bytes,
-    ) -> None:
+    def upload_object(self, container_name: str, object_name: str, data: bytes) -> None:
         """Upload data as an object inside a container."""
         raise NotImplementedError
 
     @abstractmethod
-    def download_object(
-        self,
-        container_name: str,
-        object_name: str,
-    ) -> bytes:
+    def download_object(self, container_name: str, object_name: str) -> bytes:
         """Download and return the data of an object from a container."""
         raise NotImplementedError
 
     @abstractmethod
-    def delete_object(
-        self,
-        container_name: str,
-        object_name: str,
-    ) -> bool:
+    def delete_object(self, container_name: str, object_name: str) -> bool:
         """Delete an object from a container and return True if successful."""
         raise NotImplementedError
 
     @abstractmethod
-    def list_objects(
-        self,
-        container_name: str,
-    ) -> Iterator[str]:
+    def list_objects(self, container_name: str) -> Iterator[str]:
         """Return the names of all objects stored in a container."""
         raise NotImplementedError
 
-def register_client(client: Client) -> None:
-    """
-    Register a concrete client implementation for Dependency Injection.
-    
-    When imported, your implementation should call this function to "inject" itself.
-    """
-    global _registered_client
-    _registered_client = client
 
-def get_client(*, interactive: bool = False) -> Client:
-    """
-    Return the registered cloud storage client instance.
+def register_client_factory(factory: Callable[[], Client]) -> None:
+    """Register a concrete client factory for Dependency Injection."""
+    _registered_factory[0] = factory
+
+
+def register_client(client: Client) -> None:
+    """Register a concrete client instance for Dependency Injection (compat)."""
+    register_client_factory(lambda: client)
+
+
+def get_client() -> Client:
+    """Return a cloud storage client instance.
 
     Raises:
-        RuntimeError: if no client has been registered yet.
+        RuntimeError: If no client has been registered yet.
+
     """
-    if _registered_client is None:
-        raise RuntimeError("No cloud client registered. Did you import an implementation?")
-    return _registered_client
+    factory = _registered_factory[0]
+    if factory is None:
+        raise RuntimeError(_NO_CLIENT_MSG)
+    return factory()
