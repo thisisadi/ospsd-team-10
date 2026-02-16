@@ -1,10 +1,19 @@
 import os
 import tempfile
+import uuid
+
+import pytest
 
 from cloud_storage_client_api.client import get_client
 
 
+@pytest.mark.e2e
+@pytest.mark.aws_credentials
 def test_real_s3_flow():
+    # Skip test if AWS credentials are missing
+    if not os.getenv("AWS_ACCESS_KEY_ID"):
+        pytest.skip("AWS credentials not configured")
+
     client = get_client()
 
     # create temp file
@@ -12,19 +21,30 @@ def test_real_s3_flow():
         tmp.write(b"hello world")
         local_path = tmp.name
 
-    remote_path = "test-file.txt"
+    # use unique filename to avoid collisions
+    remote_path = f"test-file-{uuid.uuid4()}.txt"
     download_path = local_path + "_downloaded"
 
-    # upload
-    client.upload_file(local_path, remote_path)
+    try:
+        # upload
+        client.upload_file(local_path, remote_path)
 
-    # list
-    files = client.list_files()
-    assert remote_path in files
+        # list
+        files = client.list_files()
+        assert remote_path in files
 
-    # download
-    client.download_file(remote_path, download_path)
-    assert os.path.exists(download_path)
+        # download
+        client.download_file(remote_path, download_path)
+        assert os.path.exists(download_path)
 
-    # delete
-    client.delete_file(remote_path)
+    finally:
+        # delete remote file
+        try:
+            client.delete_file(remote_path)
+        except Exception:
+            pass
+
+        # cleanup local files
+        for path in [local_path, download_path]:
+            if os.path.exists(path):
+                os.remove(path)
