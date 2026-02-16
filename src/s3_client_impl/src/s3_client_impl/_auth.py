@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 _MISSING_S3_BUCKET_MSG = "Missing required env var: S3_BUCKET"
 
+
 class MissingCredentialsError(RuntimeError):
     """Raised when required environment variables are missing."""
 
