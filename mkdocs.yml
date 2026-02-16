@@ -4,12 +4,10 @@ site_description: "A component-based Python cloud storage client with an AWS S3 
 theme:
   name: material
   palette:
-    # Light mode
     - scheme: default
       toggle:
         icon: material/weather-sunny
         name: Switch to dark mode
-    # Dark mode
     - scheme: slate
       toggle:
         icon: material/weather-night
@@ -32,13 +30,10 @@ markdown_extensions:
 
 plugins:
   - mkdocstrings:
+      default_handler: python
       handlers:
         python:
           options:
-            # This helps mkdocstrings find packages in the src directory
-            search_paths:
-              - components/cloud_storage_client_api/src
-              - components/s3_client_impl/src
             show_source: false
-            docstring_section_style: spacy
+            docstring_style: google   # <-- use google, numpy, or restructuredtext
             members_order: source
