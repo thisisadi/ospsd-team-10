@@ -22,7 +22,7 @@ jobs:
             source $BASH_ENV
             uv venv --python 3.11
             source .venv/bin/activate
-            uv sync --all-packages --extra dev --verbose
+            uv sync --all-packages --group dev --verbose
 
       - run:
           name: Verify toolchain
@@ -83,7 +83,6 @@ jobs:
           name: Run unit + integration tests (skip e2e)
           command: |
             source .venv/bin/activate
-            # Runs everything except e2e by default
             pytest components/ tests/ -m "not e2e" \
               --junitxml=test-results/unit_integration/junit.xml -v \
               --cov=components \
@@ -119,16 +118,13 @@ jobs:
           name: Run e2e tests only if AWS env vars exist
           command: |
             source .venv/bin/activate
-
-            # Require bucket at minimum; keys may be omitted if using CircleCI OIDC/IAM role,
-            # but for most setups you’ll provide keys in env vars.
             if [ -n "${AWS_S3_BUCKET}" ] && [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
               echo "AWS env vars detected. Running e2e tests..."
               pytest components/ tests/ -m "e2e" \
                 --junitxml=test-results/e2e/junit.xml -v \
                 --no-cov
             else
-              echo "AWS creds not set (need AWS_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY). Skipping e2e."
+              echo "AWS creds not set. Skipping e2e."
             fi
 
       - store_test_results:
@@ -137,6 +133,39 @@ jobs:
       - store_artifacts:
           path: test-results/e2e
           destination: test-results/e2e
+
+  deploy_docs:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/project
+    steps:
+      - attach_workspace:
+          at: .
+
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:tSa6Xa2nPRsMSDw54YO2DqCgmORD4GSmB/qWL/BB5yc"
+
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+
+      - run:
+          name: Install docs dependencies
+          command: |
+            source $BASH_ENV
+            uv venv --python 3.11
+            source .venv/bin/activate
+            uv sync --all-packages --group dev
+
+      - run:
+          name: Deploy MkDocs to gh-pages
+          command: |
+            source .venv/bin/activate
+            mkdocs gh-deploy --force
 
 workflows:
   build_and_test:
@@ -150,3 +179,8 @@ workflows:
           requires: [build]
       - test_e2e_optional:
           requires: [test_unit_integration]
+      - deploy_docs:
+          requires: [test_unit_integration]
+          filters:
+            branches:
+              only: main

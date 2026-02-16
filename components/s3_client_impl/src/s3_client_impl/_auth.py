@@ -25,7 +25,7 @@ def load_s3_config_from_env() -> S3Config:
     Optional:
       - AWS_REGION or AWS_DEFAULT_REGION
     """
-    bucket = os.environ.get("S3_BUCKET")
+    bucket = os.environ.get("AWS_S3_BUCKET")
     if not bucket:
         raise MissingCredentialsError(_MISSING_S3_BUCKET_MSG)
 

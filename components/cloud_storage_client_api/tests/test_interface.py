@@ -24,11 +24,7 @@ def test_required_methods_exist() -> None:
         "delete_object",
     }
 
-    class_methods = {
-        name
-        for name, value in inspect.getmembers(Client)
-        if callable(value)
-    }
+    class_methods = {name for name, value in inspect.getmembers(Client) if callable(value)}
 
     for method in required_methods:
         assert method in class_methods
