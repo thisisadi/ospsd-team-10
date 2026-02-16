@@ -51,13 +51,8 @@ ignore = [
   "S101", # asserts are fine (especially in tests)
 ]
 
-per-file-ignores = { 
-  "**/test_*.py" = [
-    # Tests are intentionally less strict:
-    # - Docstrings are unnecessary for test functions
-    # - Type annotations add noise to pytest tests
-    # - Path and magic value rules reduce readability in tests
-    # These exceptions are limited only to test files.
+[tool.ruff.lint.per-file-ignores]
+"**/test_*.py" = [
     "D100",
     "D101",
     "D102",
@@ -68,9 +63,8 @@ per-file-ignores = {
     "PTH110",
     "PTH107",
     "SIM105",
-    "S110"
-  ]
-}
+    "S110",
+]
 
 [tool.mypy]
 strict = true
