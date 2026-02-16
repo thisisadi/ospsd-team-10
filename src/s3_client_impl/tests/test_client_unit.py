@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from s3_client_impl.client import S3CloudStorageClient
 
 

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import os
-
 import pytest
-
 from s3_client_impl._auth import MissingCredentialsError, load_s3_config_from_env
 
 
