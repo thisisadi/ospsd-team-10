@@ -1,84 +1,67 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from cloud_storage_client_aws_impl.client import S3CloudStorageClient
+from s3_client_impl.client import S3CloudStorageClient
+
 
 # -----------------------------
-# Constructor test
+# upload_object
 # -----------------------------
-
-
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_constructor_creates_s3_client(mock_boto_client):
+def test_upload_object_calls_s3() -> None:
     mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
+    client = S3CloudStorageClient(s3=mock_s3)
 
-    client = S3CloudStorageClient(bucket_name="test-bucket")
+    client.upload_object("test-bucket", "file.txt", b"data")
 
-    assert client.bucket_name == "test-bucket"
-    mock_boto_client.assert_called_once_with("s3")
-
-
-# -----------------------------
-# upload_file
-# -----------------------------
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_upload_file_calls_s3(mock_boto_client):
-    mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
-
-    client = S3CloudStorageClient(bucket_name="test-bucket")
-
-    client.upload_file("local.txt", "remote.txt")
-
-    mock_s3.upload_file.assert_called_once_with(
-        "local.txt", "test-bucket", "remote.txt",
+    mock_s3.put_object.assert_called_once_with(
+        Bucket="test-bucket",
+        Key="file.txt",
+        Body=b"data",
     )
 
 
 # -----------------------------
-# download_file
+# download_object
 # -----------------------------
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_download_file_calls_s3(mock_boto_client):
+def test_download_object_calls_s3() -> None:
     mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
+    mock_body = MagicMock()
+    mock_body.read.return_value = b"hello"
 
-    client = S3CloudStorageClient(bucket_name="test-bucket")
+    mock_s3.get_object.return_value = {"Body": mock_body}
 
-    client.download_file("remote.txt", "local.txt")
+    client = S3CloudStorageClient(s3=mock_s3)
 
-    mock_s3.download_file.assert_called_once_with(
-        "test-bucket", "remote.txt", "local.txt",
+    data = client.download_object("test-bucket", "file.txt")
+
+    assert data == b"hello"
+    mock_s3.get_object.assert_called_once_with(
+        Bucket="test-bucket",
+        Key="file.txt",
     )
 
 
 # -----------------------------
-# delete_file
+# delete_object
 # -----------------------------
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_delete_file_calls_s3(mock_boto_client):
+def test_delete_object_calls_s3() -> None:
     mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
+    client = S3CloudStorageClient(s3=mock_s3)
 
-    client = S3CloudStorageClient(bucket_name="test-bucket")
+    result = client.delete_object("test-bucket", "file.txt")
 
-    client.delete_file("remote.txt")
-
+    assert result is True
     mock_s3.delete_object.assert_called_once_with(
         Bucket="test-bucket",
-        Key="remote.txt",
+        Key="file.txt",
     )
 
 
 # -----------------------------
-# list_files (normal case)
+# list_objects (normal case)
 # -----------------------------
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_list_files_returns_keys(mock_boto_client):
+def test_list_objects_returns_keys() -> None:
     mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
-
     mock_s3.list_objects_v2.return_value = {
         "Contents": [
             {"Key": "file1.txt"},
@@ -86,26 +69,23 @@ def test_list_files_returns_keys(mock_boto_client):
         ],
     }
 
-    client = S3CloudStorageClient(bucket_name="test-bucket")
+    client = S3CloudStorageClient(s3=mock_s3)
 
-    files = client.list_files()
+    files = list(client.list_objects("test-bucket"))
 
     assert files == ["file1.txt", "file2.txt"]
 
 
 # -----------------------------
-# list_files (empty bucket)
+# list_objects (empty bucket)
 # -----------------------------
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_list_files_empty_bucket(mock_boto_client):
+def test_list_objects_empty_bucket() -> None:
     mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
-
     mock_s3.list_objects_v2.return_value = {}
 
-    client = S3CloudStorageClient(bucket_name="test-bucket")
+    client = S3CloudStorageClient(s3=mock_s3)
 
-    files = client.list_files()
+    files = list(client.list_objects("test-bucket"))
 
     assert files == []
 
@@ -113,14 +93,11 @@ def test_list_files_empty_bucket(mock_boto_client):
 # -----------------------------
 # Error propagation test
 # -----------------------------
-@patch("cloud_storage_client_aws_impl.client.boto3.client")
-def test_upload_file_propagates_error(mock_boto_client):
+def test_upload_object_propagates_error() -> None:
     mock_s3 = MagicMock()
-    mock_boto_client.return_value = mock_s3
+    mock_s3.put_object.side_effect = Exception("Upload failed")
 
-    mock_s3.upload_file.side_effect = Exception("Upload failed")
-
-    client = S3CloudStorageClient(bucket_name="test-bucket")
+    client = S3CloudStorageClient(s3=mock_s3)
 
     with pytest.raises(Exception, match="Upload failed"):
-        client.upload_file("local.txt", "remote.txt")
+        client.upload_object("test-bucket", "file.txt", b"data")

@@ -1,5 +1,4 @@
 import os
-import tempfile
 import uuid
 
 import pytest
@@ -8,42 +7,32 @@ from cloud_storage_client_api.client import get_client
 
 @pytest.mark.e2e
 @pytest.mark.aws_credentials
-def test_real_s3_flow():
-    # Skip test if AWS credentials are missing
+def test_real_s3_flow() -> None:
+    """End-to-end S3 flow using real AWS credentials."""
     if not os.getenv("AWS_ACCESS_KEY_ID"):
         pytest.skip("AWS credentials not configured")
 
     client = get_client()
 
-    # create temp file
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(b"hello world")
-        local_path = tmp.name
-
-    # use unique filename to avoid collisions
-    remote_path = f"test-file-{uuid.uuid4()}.txt"
-    download_path = local_path + "_downloaded"
+    container = "test-bucket"  # or use env-configured bucket
+    object_name = f"test-object-{uuid.uuid4()}.txt"
+    data = b"hello world"
 
     try:
         # upload
-        client.upload_file(local_path, remote_path)
+        client.upload_object(container, object_name, data)
 
         # list
-        files = client.list_files()
-        assert remote_path in files
+        objects = list(client.list_objects(container))
+        assert object_name in objects
 
         # download
-        client.download_file(remote_path, download_path)
-        assert os.path.exists(download_path)
+        downloaded = client.download_object(container, object_name)
+        assert downloaded == data
 
     finally:
-        # delete remote file
+        # delete remote object
         try:
-            client.delete_file(remote_path)
+            client.delete_object(container, object_name)
         except Exception:  # noqa: BLE001
             pass
-
-        # cleanup local files
-        for path in [local_path, download_path]:
-            if os.path.exists(path):
-                os.remove(path)
