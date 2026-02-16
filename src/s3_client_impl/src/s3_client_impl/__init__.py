@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
-# NOTE:
-# Dependency injection will be wired once the interface
-# package exposes register_client_factory().
+from cloud_storage_client_api.client import register_client_factory
+
+from s3_client_impl.client import S3CloudStorageClient
+
+register_client_factory(S3CloudStorageClient)
