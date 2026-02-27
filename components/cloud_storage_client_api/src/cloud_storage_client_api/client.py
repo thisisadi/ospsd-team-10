@@ -5,6 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+
+class MissingCredentialsError(RuntimeError):
+    """Raised when required credentials or config for a cloud storage provider are missing."""
+
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 

@@ -1,12 +1,5 @@
 # Cloud Storage Client — Implementation
 
-This document describes my contribution to the component-based cloud storage
-client assignment. My work focuses on implementing the cloud storage API layer,
-dependency injection wiring, the AWS S3 client implementation, and ensuring the
-entire codebase passes strict static analysis and testing requirements.
-
----
-
 ## Components Implemented
 
 ### 1. Cloud Storage Client API  

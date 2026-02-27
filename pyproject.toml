@@ -34,6 +34,7 @@ ignore = [
     "PTH107",
     "SIM105",
     "S110",
+    "INP001",
 ]
 
 [tool.mypy]
@@ -45,14 +46,6 @@ mypy_path = [
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
-
-[[tool.mypy.overrides]]
-module = [
-    "boto3.*",
-    "botocore.*",
-    "s3transfer.*",
-]
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "components/*/tests"]
@@ -83,4 +76,5 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.1",
+    "boto3-stubs[s3]",
 ]

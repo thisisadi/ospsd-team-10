@@ -4,6 +4,8 @@ import pytest
 from s3_client_impl._auth import S3Config
 from s3_client_impl.client import S3CloudStorageClient
 
+pytestmark = pytest.mark.unit
+
 
 def _make_client(mock_s3: MagicMock) -> S3CloudStorageClient:
     """Create a client with injected mock S3 and config."""

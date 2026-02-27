@@ -1,6 +1,22 @@
-.venv/
-__pycache__/
-*.egg-info/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Virtual environment
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+
+# Credentials
+credentials.json
+token.json
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

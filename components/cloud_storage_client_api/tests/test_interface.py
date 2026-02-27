@@ -3,6 +3,8 @@ import inspect
 import pytest
 from cloud_storage_client_api.client import Client, get_client
 
+pytestmark = pytest.mark.unit
+
 
 def test_interface_is_abstract() -> None:
     """Interface must be abstract."""
