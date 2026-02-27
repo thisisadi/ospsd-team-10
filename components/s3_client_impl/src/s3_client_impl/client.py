@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, TypedDict, cast
 
 import boto3
 from cloud_storage_client_api.client import Client
@@ -15,16 +15,22 @@ if TYPE_CHECKING:
 
 
 class _BodyLike(Protocol):
-    """Minimal protocol for the streaming body returned by S3."""
+    """Minimal protocol for the streaming body returned by S3. Matches botocore StreamingBody."""
 
-    def read(self) -> object: ...
+    def read(self) -> bytes: ...
+
+
+class _GetObjectOutput(TypedDict):
+    """get_object response shape. Body is always present for successful responses."""
+
+    Body: _BodyLike
 
 
 class _S3Like(Protocol):
     """Minimal protocol for the S3 SDK client we call."""
 
     def put_object(self, *, Bucket: str, Key: str, Body: bytes) -> object: ...  # noqa: N803
-    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...  # noqa: N803
+    def get_object(self, *, Bucket: str, Key: str) -> _GetObjectOutput: ...  # noqa: N803
     def delete_object(self, *, Bucket: str, Key: str) -> object: ...  # noqa: N803
     def list_objects_v2(self, *, Bucket: str) -> dict[str, object]: ...  # noqa: N803
 
@@ -72,9 +78,8 @@ class S3CloudStorageClient(Client):
         bucket = container_name or cfg.bucket
 
         resp = s3.get_object(Bucket=bucket, Key=object_name)
-        body = cast("_BodyLike", resp["Body"])
-        data = body.read()
-        return cast("bytes", data)
+        body = resp["Body"]
+        return body.read()
 
     def delete_object(self, container_name: str, object_name: str) -> bool:
         """Delete an object from a container and return True if successful."""
