@@ -9,9 +9,9 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import requests
+from cloud_storage_client_api.client import MissingCredentialsError
 from dotenv import load_dotenv
 
-from cloud_storage_client_api.client import MissingCredentialsError
 from s3_client_impl.token_store import TokenData
 
 # Load environment variables from .env
