@@ -14,8 +14,8 @@ assignees: ""
 A clear and concise description of what the bug is.
 **Component(s) Affected:**
 
-- [ ] `cloud_storage_client_api` - Storage client abstraction layer
-- [ ] `s3_client_impl` - AWS S3 implementation
+- [ ] `vertical_api` - Storage client abstraction layer
+- [ ] `vertical_impl` - AWS S3 implementation
 - [ ] Configuration / Authentication (`S3Config`, env vars)
 - [ ] Dependency Injection / Factory registration
 - [ ] Testing infrastructure
@@ -42,7 +42,7 @@ A clear and concise description of what you expected to happen.
 **Minimal Reproducible Example:**
 
 ```python
-from cloud_storage_client_api.client import get_client
+from vertical_api.client import get_client
 client = get_client()
 # Example operation
 client.upload_object("my-bucket", "example.txt", b"hello")

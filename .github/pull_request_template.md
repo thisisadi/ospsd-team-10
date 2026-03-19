@@ -19,8 +19,8 @@
 - [ ] 🔨 Build / tooling
 
 ## Impacted Areas
-- [ ] `cloud_storage_client_api`
-- [ ] `s3_client_impl`
+- [ ] `vertical_api`
+- [ ] `vertical_impl`
 - [ ] Documentation
 - [ ] Tests
 - [ ] Tooling / CI
