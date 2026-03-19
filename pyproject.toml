@@ -77,4 +77,5 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.15.1",
     "boto3-stubs[s3]",
+    "types-requests>=2.32.4.20260107",
 ]
