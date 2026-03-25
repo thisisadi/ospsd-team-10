@@ -44,6 +44,8 @@ strict = true
 explicit_package_bases = true
 mypy_path = [
     "components/cloud_storage_client_api/src",
+    "components/cloud_storage_service_api_client",
+    "components/cloud_storage_adapter/src",
     "components/cloud_storage_service/src",
     "components/s3_client_impl/src",
 ]
@@ -63,7 +65,11 @@ markers = [
 
 [tool.coverage.run]
 source = ["components"]
-omit = ["*/tests/*", "*/__main__.py"]
+omit = [
+    "*/tests/*",
+    "*/__main__.py",
+    "components/cloud_storage_service_api_client/cloud_storage_service_api_client/*",
+]
 
 [tool.coverage.report]
 fail_under = 85
@@ -83,4 +89,5 @@ dev = [
     "boto3-stubs[s3]",
     "httpx>=0.28.1",
     "types-requests>=2.32.4.20260107",
+    "openapi-python-client>=0.28.3",
 ]
