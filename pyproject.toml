@@ -1,15 +1,13 @@
 [tool.uv.workspace]
 members = [
   "components/cloud_storage_client_api",
-  "components/cloud_storage_service_api_client",
-  "components/cloud_storage_adapter",
+  "components/cloud_storage_service",
   "components/s3_client_impl",
 ]
 
 [tool.uv.sources]
 cloud-storage-client-api = { workspace = true }
-cloud-storage-service-api-client = { workspace = true }
-cloud-storage-adapter = { workspace = true }
+cloud-storage-service = { workspace = true }
 s3-client-impl = { workspace = true }
 
 [tool.ruff]
@@ -46,8 +44,7 @@ strict = true
 explicit_package_bases = true
 mypy_path = [
     "components/cloud_storage_client_api/src",
-    "components/cloud_storage_service_api_client/src",
-    "components/cloud_storage_adapter/src",
+    "components/cloud_storage_service/src",
     "components/s3_client_impl/src",
 ]
 ignore_missing_imports = false
@@ -78,6 +75,7 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.0",
     "mypy>=1.19.1",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
