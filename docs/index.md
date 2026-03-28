@@ -5,4 +5,5 @@ Welcome to the documentation for the Cloud Storage Client Project. This project 
 You can navigate to:
 
 - Architecture details
+- [Design](DESIGN.md) (full design document, same as the repository root `DESIGN.md`)
 - API documentation for the interface and implementation components
