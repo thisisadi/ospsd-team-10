@@ -1,0 +1,80 @@
+[tool.uv.workspace]
+members = [
+  "components/cloud_storage_client_api",
+  "components/s3_client_impl",
+]
+
+[tool.uv.sources]
+cloud-storage-client-api = { workspace = true }
+s3-client-impl = { workspace = true }
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D203",
+  "D213",
+  "S101",
+  "COM812"
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/test_*.py" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "ANN001",
+    "ANN201",
+    "PLR2004",
+    "PTH110",
+    "PTH107",
+    "SIM105",
+    "S110",
+    "INP001",
+]
+
+[tool.mypy]
+strict = true
+explicit_package_bases = true
+mypy_path = [
+    "components/cloud_storage_client_api/src",
+    "components/s3_client_impl/src",
+]
+ignore_missing_imports = false
+warn_unused_ignores = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "components/*/tests"]
+addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+markers = [
+    "unit: marks tests as unit tests (fast, isolated)",
+    "integration: marks tests as integration tests (medium speed, real dependencies)",
+    "e2e: marks tests as end-to-end tests (slow, full system)",
+    "circleci: marks tests that can run in CI/CD environments without local credentials",
+    "aws_credentials: marks tests that require AWS credentials / configured env vars",
+]
+
+[tool.coverage.run]
+source = ["components"]
+omit = ["*/tests/*", "*/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 85
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.1",
+    "boto3-stubs[s3]",
+]

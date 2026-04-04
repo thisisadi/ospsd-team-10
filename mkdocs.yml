@@ -1,0 +1,41 @@
+site_name: Cloud Storage Client Project (AWS S3)
+site_description: "A component-based Python cloud storage client with an AWS S3 implementation."
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - content.code.copy
+
+nav:
+  - "Overview": "index.md"
+  - "Architecture": "component.md"
+  - "Getting Started": "contributing.md"
+  - "Design": "design.md"
+  - "API Reference":
+      - "Cloud Storage Client API": "api/cloud_storage_client_api.md"
+      - "AWS S3 Client Implementation": "api/s3_client_impl.md"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+plugins:
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: false
+            docstring_style: google   # <-- use google, numpy, or restructuredtext
+            members_order: source
