@@ -72,6 +72,26 @@ source .venv/bin/activate
 uv sync --all-packages --group dev
 ```
 
+## Docker (service)
+
+Build and run the FastAPI service container:
+
+```bash
+docker build -t ospsd-team-10-service .
+docker run --rm -p 8000:8000 \
+  -e SESSION_SECRET_KEY="replace-me" \
+  -e AWS_S3_BUCKET="your-bucket" \
+  -e AWS_ACCESS_KEY_ID="xxx" \
+  -e AWS_SECRET_ACCESS_KEY="xxx" \
+  -e AWS_REGION="us-east-1" \
+  ospsd-team-10-service
+```
+
+Then visit:
+
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/openapi.json`
+
 ## Usage Examples
 
 ### Local Usage (Direct S3)
