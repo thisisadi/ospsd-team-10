@@ -134,39 +134,6 @@ jobs:
           path: test-results/e2e
           destination: test-results/e2e
 
-  deploy_docs:
-    docker:
-      - image: cimg/python:3.11
-    working_directory: ~/project
-    steps:
-      - attach_workspace:
-          at: .
-
-      - add_ssh_keys:
-          fingerprints:
-            - "SHA256:tSa6Xa2nPRsMSDw54YO2DqCgmORD4GSmB/qWL/BB5yc"
-
-      - run:
-          name: Install uv
-          command: |
-            curl -LsSf https://astral.sh/uv/install.sh | sh
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> $BASH_ENV
-            source $BASH_ENV
-
-      - run:
-          name: Install docs dependencies
-          command: |
-            source $BASH_ENV
-            uv venv --python 3.11
-            source .venv/bin/activate
-            uv sync --all-packages --group dev
-
-      - run:
-          name: Deploy MkDocs to gh-pages
-          command: |
-            source .venv/bin/activate
-            mkdocs gh-deploy --force
-
 workflows:
   build_and_test:
     jobs:
@@ -179,8 +146,3 @@ workflows:
           requires: [build]
       - test_e2e_optional:
           requires: [test_unit_integration]
-      - deploy_docs:
-          requires: [test_unit_integration]
-          filters:
-            branches:
-              only: main
