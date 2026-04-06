@@ -20,7 +20,7 @@ jobs:
           name: Create venv & install deps via uv
           command: |
             source $BASH_ENV
-            uv venv --python 3.11
+            uv venv --python 3.11 --clear
             source .venv/bin/activate
             uv sync --all-packages --group dev --verbose
 
@@ -29,10 +29,10 @@ jobs:
           command: |
             source .venv/bin/activate
             uv tree
-            ruff --version
-            mypy --version
-            pytest --version
-            coverage --version
+            uv run ruff --version
+            uv run mypy --version
+            uv run pytest --version
+            uv run coverage --version
 
       - persist_to_workspace:
           root: .
@@ -50,8 +50,8 @@ jobs:
           name: Ruff (lint + format check)
           command: |
             source .venv/bin/activate
-            ruff check .
-            ruff format --check .
+            uv run ruff check .
+            uv run ruff format --check .
 
   typecheck:
     docker:
@@ -64,7 +64,8 @@ jobs:
           name: MyPy (strict)
           command: |
             source .venv/bin/activate
-            mypy components tests
+            export PYTHONPATH=$(pwd)/src/vertical_api/src:$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
+            uv run mypy .
 
   test_unit_integration:
     docker:
@@ -76,16 +77,19 @@ jobs:
       - run:
           name: Create results directories
           command: |
-            source .venv/bin/activate
             mkdir -p test-results/unit_integration coverage-reports
 
       - run:
           name: Run unit + integration tests (skip e2e)
           command: |
             source .venv/bin/activate
-            pytest components/ tests/ -m "not e2e" \
+            export PYTHONPATH=$(pwd)/src/vertical_api/src:$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
+            uv run pytest tests src -m "not e2e" \
               --junitxml=test-results/unit_integration/junit.xml -v \
-              --cov=components \
+              --cov=vertical_api \
+              --cov=vertical_adapter \
+              --cov=vertical_service \
+              --cov=vertical_impl \
               --cov-report=term-missing \
               --cov-report=xml:coverage-reports/coverage.xml \
               --cov-report=html:coverage-reports/html
@@ -111,16 +115,16 @@ jobs:
       - run:
           name: Create results directory
           command: |
-            source .venv/bin/activate
             mkdir -p test-results/e2e
 
       - run:
           name: Run e2e tests only if AWS env vars exist
           command: |
             source .venv/bin/activate
+            export PYTHONPATH=$(pwd)/src/vertical_api/src:$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
             if [ -n "${AWS_S3_BUCKET}" ] && [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
               echo "AWS env vars detected. Running e2e tests..."
-              pytest components/ tests/ -m "e2e" \
+              uv run pytest tests src -m "e2e" \
                 --junitxml=test-results/e2e/junit.xml -v \
                 --no-cov
             else
@@ -134,6 +138,52 @@ jobs:
           path: test-results/e2e
           destination: test-results/e2e
 
+  deploy_render_hook:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - run:
+          name: Trigger Render deploy hook (optional)
+          command: |
+            if [ -n "${RENDER_DEPLOY_HOOK_URL}" ]; then
+              curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}"
+            else
+              echo "RENDER_DEPLOY_HOOK_URL not set in CircleCI project settings; skipping deploy hook."
+            fi
+
+  deploy_docs:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/project
+    steps:
+      - attach_workspace:
+          at: .
+
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:tSa6Xa2nPRsMSDw54YO2DqCgmORD4GSmB/qWL/BB5yc"
+
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+
+      - run:
+          name: Install docs dependencies
+          command: |
+            source $BASH_ENV
+            uv venv --python 3.11 --clear
+            source .venv/bin/activate
+            uv sync --all-packages --group dev
+
+      - run:
+          name: Deploy MkDocs to gh-pages
+          command: |
+            source .venv/bin/activate
+            uv run mkdocs gh-deploy --force
+
 workflows:
   build_and_test:
     jobs:
@@ -146,3 +196,10 @@ workflows:
           requires: [build]
       - test_e2e_optional:
           requires: [test_unit_integration]
+      - deploy_render_hook:
+          requires: [test_unit_integration]
+      - deploy_docs:
+          requires: [test_unit_integration]
+          filters:
+            branches:
+              only: main

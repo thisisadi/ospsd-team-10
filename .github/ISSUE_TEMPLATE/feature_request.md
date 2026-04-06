@@ -14,8 +14,8 @@ assignees: ""
 
 **Component(s) Affected:**
 
-- [ ] `cloud_storage_client_api` - Storage client abstraction layer (new operations)
-- [ ] `s3_client_impl` - AWS S3 implementation
+- [ ] `vertical_api` - Storage client abstraction layer (new operations)
+- [ ] `vertical_impl` - AWS S3 implementation
 - [ ] Configuration / Authentication (`S3Config`, env vars)
 - [ ] Dependency Injection / Factory registration
 - [ ] New component (specify name)
@@ -48,7 +48,7 @@ Detailed description of the proposed feature:
 
 ```python
 # Show how the new feature would be used
-from cloud_storage_client_api.client import get_client
+from vertical_api.client import get_client
 
 client = get_client()
 # Example of new functionality
@@ -251,7 +251,7 @@ List any new external dependencies this feature would require:
 
 ```python
 # Example 1: Basic usage
-from cloud_storage_client_api.client import get_client
+from vertical_api.client import get_client
 
 client = get_client()
 client.new_feature_method("my-bucket", "example.txt")
@@ -259,7 +259,7 @@ client.new_feature_method("my-bucket", "example.txt")
 
 ```python
 # Example 2: Advanced usage
-from cloud_storage_client_api.client import get_client
+from vertical_api.client import get_client
 
 client = get_client()
 advanced_result = client.advanced_feature(

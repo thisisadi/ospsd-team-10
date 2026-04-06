@@ -1,16 +1,25 @@
 [tool.uv.workspace]
 members = [
-  "components/cloud_storage_client_api",
-  "components/s3_client_impl",
+  "src/vertical_api",
+  "src/vertical_service_api_client",
+  "src/vertical_adapter",
+  "src/vertical_service",
+  "src/vertical_impl",
 ]
 
 [tool.uv.sources]
-cloud-storage-client-api = { workspace = true }
-s3-client-impl = { workspace = true }
+vertical-api = { workspace = true }
+vertical-service-api-client = { workspace = true }
+vertical-adapter = { workspace = true }
+vertical-service = { workspace = true }
+vertical-impl = { workspace = true }
 
 [tool.ruff]
 line-length = 130
 target-version = "py311"
+exclude = [
+  "src/vertical_service_api_client/src",
+]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -18,63 +27,86 @@ ignore = [
   "D203",
   "D213",
   "S101",
-  "COM812"
+  "COM812",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "**/test_*.py" = [
-    "D100",
-    "D101",
-    "D102",
-    "D103",
-    "ANN001",
-    "ANN201",
-    "PLR2004",
-    "PTH110",
-    "PTH107",
-    "SIM105",
-    "S110",
-    "INP001",
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "ANN001",
+  "ANN201",
+  "PLR2004",
+  "PTH110",
+  "PTH107",
+  "SIM105",
+  "S110",
+  "INP001",
 ]
 
 [tool.mypy]
 strict = true
 explicit_package_bases = true
 mypy_path = [
-    "components/cloud_storage_client_api/src",
-    "components/s3_client_impl/src",
+  "src/vertical_api/src",
+  "src/vertical_service_api_client/src",
+  "src/vertical_adapter/src",
+  "src/vertical_service/src",
+  "src/vertical_impl/src",
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "components/*/tests"]
-addopts = ["--cov", "--cov-report=term-missing", "--import-mode=importlib"]
+testpaths = ["tests", "src/*/tests"]
+addopts = [
+  "--cov=vertical_api",
+  "--cov=vertical_adapter",
+  "--cov=vertical_service",
+  "--cov=vertical_impl",
+  "--cov-report=term-missing",
+  "--import-mode=importlib",
+]
+
 markers = [
-    "unit: marks tests as unit tests (fast, isolated)",
-    "integration: marks tests as integration tests (medium speed, real dependencies)",
-    "e2e: marks tests as end-to-end tests (slow, full system)",
-    "circleci: marks tests that can run in CI/CD environments without local credentials",
-    "aws_credentials: marks tests that require AWS credentials / configured env vars",
+  "unit: marks tests as unit tests (fast, isolated)",
+  "integration: marks tests as integration tests (medium speed, real dependencies)",
+  "e2e: marks tests as end-to-end tests (slow, full system)",
+  "circleci: marks tests that can run in CI/CD environments without local credentials",
+  "aws_credentials: marks tests that require AWS credentials / configured env vars",
 ]
 
 [tool.coverage.run]
-source = ["components"]
-omit = ["*/tests/*", "*/__main__.py"]
+source = [
+  "vertical_api",
+  "vertical_adapter",
+  "vertical_service",
+  "vertical_impl",
+]
+omit = [
+  "*/tests/*",
+  "*/__main__.py",
+  "src/vertical_service_api_client/src/*",
+]
 
 [tool.coverage.report]
 fail_under = 85
 exclude_lines = [
-    "pragma: no cover",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING:",
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
 ]
 
 [dependency-groups]
 dev = [
-    "mypy>=1.19.1",
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
-    "ruff>=0.15.1",
-    "boto3-stubs[s3]",
+  "mypy>=1.19.1",
+  "pytest>=9.0.2",
+  "pytest-cov>=7.0.0",
+  "ruff>=0.15.1",
+  "types-requests",
+  "boto3-stubs",
+  "mkdocs-material>=9.5.0",
+  "mkdocstrings[python]>=0.26.0",
 ]

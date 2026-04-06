@@ -1,0 +1,22 @@
+[project]
+name = "vertical-adapter"
+version = "0.1.0"
+description = "Adapter implementing cloud storage Client via service API client"
+requires-python = ">=3.11"
+dependencies = [
+  "vertical-api",
+  "vertical-service-api-client",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
