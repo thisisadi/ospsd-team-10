@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from uuid import uuid4
 
+from cloud_storage_api.exceptions import AuthenticationError
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from vertical_api.client import MissingCredentialsError
 from vertical_impl.oauth import auth_callback as oauth_auth_callback
 from vertical_impl.oauth import build_authorization_url
 from vertical_impl.token_store import store_token
@@ -27,7 +27,7 @@ def auth_login(request: Request) -> RedirectResponse:
     session_id = request.session[OAUTH_SESSION_ID_KEY]
     try:
         authorization_url = build_authorization_url(session_id)
-    except MissingCredentialsError as exc:
+    except AuthenticationError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return RedirectResponse(
         url=authorization_url,
@@ -48,18 +48,10 @@ def auth_callback(
     if not result.success:
         status_code = status.HTTP_502_BAD_GATEWAY if result.error_type == "exchange_error" else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code, detail=result.error or "OAuth callback failed.")
-
     if not session_id:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="Missing OAuth session.",
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Missing OAuth session.")
     if result.token_data is None:
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OAuth succeeded without token data.",
-        )
-
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="OAuth succeeded without token data.")
     store_token(session_id, result.token_data)
     destination = os.environ.get(_SUCCESS_REDIRECT_ENV, "/docs")
     return RedirectResponse(url=destination, status_code=status.HTTP_307_TEMPORARY_REDIRECT)

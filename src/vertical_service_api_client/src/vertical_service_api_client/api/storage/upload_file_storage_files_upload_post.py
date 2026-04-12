@@ -1,37 +1,51 @@
 from http import HTTPStatus
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.body_upload_file_storage_files_upload_post import BodyUploadFileStorageFilesUploadPost
 from ...models.http_validation_error import HTTPValidationError
-from ...types import Response
+from ...models.object_info import ObjectInfo
+from ...types import UNSET, Response
 
 
 def _get_kwargs(
-    container_name: str,
-    object_key: str,
+    *,
+    body: BodyUploadFileStorageFilesUploadPost,
+    container: str,
+    remote_path: str,
 ) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
+
+    params: dict[str, Any] = {}
+
+    params["container"] = container
+
+    params["remote_path"] = remote_path
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
-        "method": "get",
-        "url": "/storage/{container_name}/objects/{object_key}".format(
-            container_name=quote(str(container_name), safe=""),
-            object_key=quote(str(object_key), safe=""),
-        ),
+        "method": "post",
+        "url": "/storage/files/upload",
+        "params": params,
     }
 
+    _kwargs["files"] = body.to_multipart()
+
+    _kwargs["headers"] = headers
     return _kwargs
 
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Any | HTTPValidationError | None:
-    if response.status_code == 200:
-        response_200 = response.json()
-        return response_200
+) -> HTTPValidationError | ObjectInfo | None:
+    if response.status_code == 201:
+        response_201 = ObjectInfo.from_dict(response.json())
+
+        return response_201
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -46,7 +60,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[Any | HTTPValidationError]:
+) -> Response[HTTPValidationError | ObjectInfo]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -56,30 +70,33 @@ def _build_response(
 
 
 def sync_detailed(
-    container_name: str,
-    object_key: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | HTTPValidationError]:
-    """Download Object
+    body: BodyUploadFileStorageFilesUploadPost,
+    container: str,
+    remote_path: str,
+) -> Response[HTTPValidationError | ObjectInfo]:
+    """Upload File
 
-     Download object bytes (same contract as Client.download_object).
+     Upload a file to cloud storage (maps to CloudStorageClient.upload_obj).
 
     Args:
-        container_name (str):
-        object_key (str):
+        container (str):
+        remote_path (str):
+        body (BodyUploadFileStorageFilesUploadPost):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError]
+        Response[HTTPValidationError | ObjectInfo]
     """
 
     kwargs = _get_kwargs(
-        container_name=container_name,
-        object_key=object_key,
+        body=body,
+        container=container,
+        remote_path=remote_path,
     )
 
     response = client.get_httpx_client().request(
@@ -90,59 +107,65 @@ def sync_detailed(
 
 
 def sync(
-    container_name: str,
-    object_key: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | HTTPValidationError | None:
-    """Download Object
+    body: BodyUploadFileStorageFilesUploadPost,
+    container: str,
+    remote_path: str,
+) -> HTTPValidationError | ObjectInfo | None:
+    """Upload File
 
-     Download object bytes (same contract as Client.download_object).
+     Upload a file to cloud storage (maps to CloudStorageClient.upload_obj).
 
     Args:
-        container_name (str):
-        object_key (str):
+        container (str):
+        remote_path (str):
+        body (BodyUploadFileStorageFilesUploadPost):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError
+        HTTPValidationError | ObjectInfo
     """
 
     return sync_detailed(
-        container_name=container_name,
-        object_key=object_key,
         client=client,
+        body=body,
+        container=container,
+        remote_path=remote_path,
     ).parsed
 
 
 async def asyncio_detailed(
-    container_name: str,
-    object_key: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[Any | HTTPValidationError]:
-    """Download Object
+    body: BodyUploadFileStorageFilesUploadPost,
+    container: str,
+    remote_path: str,
+) -> Response[HTTPValidationError | ObjectInfo]:
+    """Upload File
 
-     Download object bytes (same contract as Client.download_object).
+     Upload a file to cloud storage (maps to CloudStorageClient.upload_obj).
 
     Args:
-        container_name (str):
-        object_key (str):
+        container (str):
+        remote_path (str):
+        body (BodyUploadFileStorageFilesUploadPost):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[Any | HTTPValidationError]
+        Response[HTTPValidationError | ObjectInfo]
     """
 
     kwargs = _get_kwargs(
-        container_name=container_name,
-        object_key=object_key,
+        body=body,
+        container=container,
+        remote_path=remote_path,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -151,31 +174,34 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    container_name: str,
-    object_key: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Any | HTTPValidationError | None:
-    """Download Object
+    body: BodyUploadFileStorageFilesUploadPost,
+    container: str,
+    remote_path: str,
+) -> HTTPValidationError | ObjectInfo | None:
+    """Upload File
 
-     Download object bytes (same contract as Client.download_object).
+     Upload a file to cloud storage (maps to CloudStorageClient.upload_obj).
 
     Args:
-        container_name (str):
-        object_key (str):
+        container (str):
+        remote_path (str):
+        body (BodyUploadFileStorageFilesUploadPost):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Any | HTTPValidationError
+        HTTPValidationError | ObjectInfo
     """
 
     return (
         await asyncio_detailed(
-            container_name=container_name,
-            object_key=object_key,
             client=client,
+            body=body,
+            container=container,
+            remote_path=remote_path,
         )
     ).parsed

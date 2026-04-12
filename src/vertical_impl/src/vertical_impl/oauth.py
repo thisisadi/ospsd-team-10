@@ -10,8 +10,8 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import requests
+from cloud_storage_api.exceptions import AuthenticationError
 from dotenv import load_dotenv
-from vertical_api.client import MissingCredentialsError
 
 from vertical_impl.token_store import TokenData
 
@@ -53,7 +53,7 @@ def _require_env(name: str) -> str:
     """Get required environment variable or raise error."""
     value = os.environ.get(name)
     if not value:
-        raise MissingCredentialsError(_MISSING_ENV_MSG.format(name=name))
+        raise AuthenticationError(_MISSING_ENV_MSG.format(name=name))
     return value
 
 
@@ -239,7 +239,7 @@ def auth_callback(
             error=None,
             error_type=None,
         )
-    except (requests.RequestException, MissingCredentialsError, KeyError) as ex:
+    except (requests.RequestException, KeyError) as ex:
         logger.exception("Token exchange failed")
         return AuthCallbackResult(
             success=False,

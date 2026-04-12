@@ -1,6 +1,13 @@
+[project]
+name = "ospsd-team-10"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "cloud-storage-api",
+]
+
 [tool.uv.workspace]
 members = [
-  "src/vertical_api",
   "src/vertical_service_api_client",
   "src/vertical_adapter",
   "src/vertical_service",
@@ -8,17 +15,18 @@ members = [
 ]
 
 [tool.uv.sources]
-vertical-api = { workspace = true }
 vertical-service-api-client = { workspace = true }
 vertical-adapter = { workspace = true }
 vertical-service = { workspace = true }
 vertical-impl = { workspace = true }
+cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage.git", rev = "v1.0.0" }
 
 [tool.ruff]
 line-length = 130
 target-version = "py311"
 exclude = [
   "src/vertical_service_api_client/src",
+  "src/vertical_api",
 ]
 
 [tool.ruff.lint]
@@ -50,7 +58,6 @@ ignore = [
 strict = true
 explicit_package_bases = true
 mypy_path = [
-  "src/vertical_api/src",
   "src/vertical_service_api_client/src",
   "src/vertical_adapter/src",
   "src/vertical_service/src",
@@ -58,11 +65,19 @@ mypy_path = [
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
+exclude = [
+  "src/vertical_api",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src/*/tests"]
+testpaths = [
+  "tests",
+  "src/vertical_adapter/tests",
+  "src/vertical_impl/tests",
+  "src/vertical_service/tests",
+  "src/vertical_service_api_client/tests",
+]
 addopts = [
-  "--cov=vertical_api",
   "--cov=vertical_adapter",
   "--cov=vertical_service",
   "--cov=vertical_impl",
@@ -80,7 +95,6 @@ markers = [
 
 [tool.coverage.run]
 source = [
-  "vertical_api",
   "vertical_adapter",
   "vertical_service",
   "vertical_impl",
@@ -109,4 +123,5 @@ dev = [
   "boto3-stubs",
   "mkdocs-material>=9.5.0",
   "mkdocstrings[python]>=0.26.0",
+  "types-python-dateutil>=2.9.0.20260408",
 ]

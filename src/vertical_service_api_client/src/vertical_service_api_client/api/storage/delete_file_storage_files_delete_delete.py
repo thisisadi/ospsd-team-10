@@ -1,24 +1,33 @@
 from http import HTTPStatus
-from typing import Any, cast
-from urllib.parse import quote
+from typing import Any
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
+from ...models.delete_result import DeleteResult
 from ...models.http_validation_error import HTTPValidationError
-from ...types import Response
+from ...types import UNSET, Response
 
 
 def _get_kwargs(
-    container_name: str,
+    *,
+    container: str,
+    object_name: str,
 ) -> dict[str, Any]:
 
+    params: dict[str, Any] = {}
+
+    params["container"] = container
+
+    params["object_name"] = object_name
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
     _kwargs: dict[str, Any] = {
-        "method": "get",
-        "url": "/storage/{container_name}/objects".format(
-            container_name=quote(str(container_name), safe=""),
-        ),
+        "method": "delete",
+        "url": "/storage/files/delete",
+        "params": params,
     }
 
     return _kwargs
@@ -26,9 +35,9 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> HTTPValidationError | list[str] | None:
+) -> DeleteResult | HTTPValidationError | None:
     if response.status_code == 200:
-        response_200 = cast(list[str], response.json())
+        response_200 = DeleteResult.from_dict(response.json())
 
         return response_200
 
@@ -45,7 +54,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[HTTPValidationError | list[str]]:
+) -> Response[DeleteResult | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -55,27 +64,30 @@ def _build_response(
 
 
 def sync_detailed(
-    container_name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[HTTPValidationError | list[str]]:
-    """List Objects
+    container: str,
+    object_name: str,
+) -> Response[DeleteResult | HTTPValidationError]:
+    """Delete File
 
-     List object names in a container (same contract as Client.list_objects).
+     Delete a file from cloud storage (maps to CloudStorageClient.delete_file).
 
     Args:
-        container_name (str):
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | list[str]]
+        Response[DeleteResult | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
-        container_name=container_name,
+        container=container,
+        object_name=object_name,
     )
 
     response = client.get_httpx_client().request(
@@ -86,53 +98,59 @@ def sync_detailed(
 
 
 def sync(
-    container_name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> HTTPValidationError | list[str] | None:
-    """List Objects
+    container: str,
+    object_name: str,
+) -> DeleteResult | HTTPValidationError | None:
+    """Delete File
 
-     List object names in a container (same contract as Client.list_objects).
+     Delete a file from cloud storage (maps to CloudStorageClient.delete_file).
 
     Args:
-        container_name (str):
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | list[str]
+        DeleteResult | HTTPValidationError
     """
 
     return sync_detailed(
-        container_name=container_name,
         client=client,
+        container=container,
+        object_name=object_name,
     ).parsed
 
 
 async def asyncio_detailed(
-    container_name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> Response[HTTPValidationError | list[str]]:
-    """List Objects
+    container: str,
+    object_name: str,
+) -> Response[DeleteResult | HTTPValidationError]:
+    """Delete File
 
-     List object names in a container (same contract as Client.list_objects).
+     Delete a file from cloud storage (maps to CloudStorageClient.delete_file).
 
     Args:
-        container_name (str):
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[HTTPValidationError | list[str]]
+        Response[DeleteResult | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
-        container_name=container_name,
+        container=container,
+        object_name=object_name,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -141,28 +159,31 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    container_name: str,
     *,
     client: AuthenticatedClient | Client,
-) -> HTTPValidationError | list[str] | None:
-    """List Objects
+    container: str,
+    object_name: str,
+) -> DeleteResult | HTTPValidationError | None:
+    """Delete File
 
-     List object names in a container (same contract as Client.list_objects).
+     Delete a file from cloud storage (maps to CloudStorageClient.delete_file).
 
     Args:
-        container_name (str):
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        HTTPValidationError | list[str]
+        DeleteResult | HTTPValidationError
     """
 
     return (
         await asyncio_detailed(
-            container_name=container_name,
             client=client,
+            container=container,
+            object_name=object_name,
         )
     ).parsed

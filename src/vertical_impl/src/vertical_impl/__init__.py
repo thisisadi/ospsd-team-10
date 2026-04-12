@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from vertical_api.client import register_client_factory
+from typing import TYPE_CHECKING
 
 from vertical_impl.client import S3CloudStorageClient
 
-register_client_factory(S3CloudStorageClient)
+if TYPE_CHECKING:
+    from cloud_storage_api import CloudStorageClient
+
+
+def factory() -> CloudStorageClient:
+    """Create and return a new S3CloudStorageClient instance."""
+    return S3CloudStorageClient()

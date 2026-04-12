@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Adapter implementing cloud storage Client via service API client"
 requires-python = ">=3.11"
 dependencies = [
-  "vertical-api",
   "vertical-service-api-client",
 ]
 
