@@ -1,108 +1,158 @@
-"""HTTP mapping of the cloud storage Client abstract API."""
+# ruff: noqa: TC002
+"""HTTP mapping of the shared CloudStorageClient API."""
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from vertical_api.client import (
-    MissingCredentialsError,
-    NotAuthenticatedError,
+from cloud_storage_api import CloudStorageClient
+from cloud_storage_api.exceptions import (
+    AuthenticationError,
+    ContainerNotFoundError,
+    InvalidContainerError,
+    InvalidObjectNameError,
+    LocalFileAccessError,
     ObjectNotFoundError,
-    StorageError,
-    StorageOperationFailedError,
-    get_client,
+    StorageBackendError,
 )
+from cloud_storage_api.models import DeleteResult, ObjectInfo
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
 
 from vertical_service.deps import require_oauth_session
 
-router = APIRouter()
+router = APIRouter(prefix="/files")
 
-_PORT_STORAGE_ERRORS: tuple[type[BaseException], ...] = (
+_STORAGE_ERRORS: tuple[type[BaseException], ...] = (
     ObjectNotFoundError,
-    NotAuthenticatedError,
-    MissingCredentialsError,
-    StorageOperationFailedError,
-    StorageError,
+    AuthenticationError,
+    ContainerNotFoundError,
+    InvalidContainerError,
+    InvalidObjectNameError,
+    LocalFileAccessError,
+    StorageBackendError,
 )
 
-
-def _storage_http_exception(exc: BaseException) -> HTTPException:
-    """Map port-level storage errors to HTTP responses."""
-    if isinstance(exc, ObjectNotFoundError):
-        return HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, NotAuthenticatedError):
-        return HTTPException(status.HTTP_401_UNAUTHORIZED, detail=str(exc))
-    if isinstance(exc, MissingCredentialsError):
-        return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
-    if isinstance(exc, StorageOperationFailedError):
-        return HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc))
-    if isinstance(exc, StorageError):
-        return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
-    fallback = "Unexpected storage error."
-    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=fallback)
+_EXCEPTION_STATUS_MAP: dict[type[BaseException], int] = {
+    ObjectNotFoundError: status.HTTP_404_NOT_FOUND,
+    AuthenticationError: status.HTTP_401_UNAUTHORIZED,
+    ContainerNotFoundError: status.HTTP_404_NOT_FOUND,
+    InvalidContainerError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    InvalidObjectNameError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    LocalFileAccessError: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    StorageBackendError: status.HTTP_502_BAD_GATEWAY,
+}
 
 
-@router.get("/{container_name}/objects")
-def list_objects(
-    container_name: str,
+def _to_http(exc: BaseException) -> HTTPException:
+    for exc_type, status_code in _EXCEPTION_STATUS_MAP.items():
+        if isinstance(exc, exc_type):
+            return HTTPException(status_code=status_code, detail=str(exc))
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Unexpected storage error.",
+    )
+
+
+def _get_storage_client(request: Request) -> CloudStorageClient:
+    """Retrieve the typed storage client from application state."""
+    client: CloudStorageClient = request.app.state.storage_client
+    return client
+
+
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
+async def upload_file(
     _session_id: Annotated[str, Depends(require_oauth_session)],
-) -> list[str]:
-    """List object names in a container (same contract as Client.list_objects)."""
-    try:
-        return list(get_client().list_objects(container_name))
-    except _PORT_STORAGE_ERRORS as exc:
-        raise _storage_http_exception(exc) from exc
-
-
-@router.post(
-    "/{container_name}/objects/{object_key:path}",
-    status_code=status.HTTP_201_CREATED,
-)
-async def upload_object(
-    container_name: str,
-    object_key: str,
     request: Request,
-    _session_id: Annotated[str, Depends(require_oauth_session)],
-) -> None:
-    """Upload raw bytes as an object (same contract as Client.upload_object)."""
-    data = await request.body()
+    container: str,
+    remote_path: str,
+    file: UploadFile,
+) -> ObjectInfo:
+    """Upload a file to the specified container and path."""
     try:
-        upload_result = get_client().upload_object(container_name, object_key, data)
-    except _PORT_STORAGE_ERRORS as exc:
-        raise _storage_http_exception(exc) from exc
-    if getattr(upload_result, "success", True) is False:
-        detail = getattr(upload_result, "error", None) or getattr(upload_result, "detail", None) or "Upload failed."
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(detail))
+        return _get_storage_client(request).upload_obj(
+            container=container,
+            file_obj=file.file,
+            remote_path=remote_path,
+        )
+    except _STORAGE_ERRORS as exc:
+        raise _to_http(exc) from exc
 
 
-@router.get("/{container_name}/objects/{object_key:path}")
-def download_object(
-    container_name: str,
-    object_key: str,
+@router.get("/download")
+def download_file(
     _session_id: Annotated[str, Depends(require_oauth_session)],
+    request: Request,
+    container: str,
+    object_name: str,
 ) -> Response:
-    """Download object bytes (same contract as Client.download_object)."""
+    """Download a file from storage and return its binary content."""
+    tmp_path: Path | None = None
     try:
-        body = get_client().download_object(container_name, object_key)
-    except _PORT_STORAGE_ERRORS as exc:
-        raise _storage_http_exception(exc) from exc
-    return Response(content=body, media_type="application/octet-stream")
+        with NamedTemporaryFile(delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        _get_storage_client(request).download_file(
+            container=container,
+            object_name=object_name,
+            file_name=str(tmp_path),
+        )
+        with tmp_path.open("rb") as f:
+            content = f.read()
+        return Response(content=content, media_type="application/octet-stream")
+    except _STORAGE_ERRORS as exc:
+        raise _to_http(exc) from exc
+    finally:
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink()
 
 
-@router.delete("/{container_name}/objects/{object_key:path}")
-def delete_object(
-    container_name: str,
-    object_key: str,
+@router.get("/list")
+def list_files(
     _session_id: Annotated[str, Depends(require_oauth_session)],
-) -> dict[str, bool]:
-    """Delete an object (same contract as Client.delete_object)."""
+    request: Request,
+    container: str,
+    prefix: str = "",
+) -> list[ObjectInfo]:
+    """List files in a container with an optional prefix filter."""
     try:
-        raw = get_client().delete_object(container_name, object_key)
-    except _PORT_STORAGE_ERRORS as exc:
-        raise _storage_http_exception(exc) from exc
-    if hasattr(raw, "success") and raw.success is False:
-        detail = getattr(raw, "error", None) or getattr(raw, "detail", None) or "Delete failed."
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(detail))
-    deleted = bool(getattr(raw, "success", True)) if hasattr(raw, "success") else bool(raw)
-    return {"deleted": deleted}
+        return _get_storage_client(request).list_files(
+            container=container,
+            prefix=prefix,
+        )
+    except _STORAGE_ERRORS as exc:
+        raise _to_http(exc) from exc
+
+
+@router.delete("/delete")
+def delete_file(
+    _session_id: Annotated[str, Depends(require_oauth_session)],
+    request: Request,
+    container: str,
+    object_name: str,
+) -> DeleteResult:
+    """Delete a file from the specified container."""
+    try:
+        return _get_storage_client(request).delete_file(
+            container=container,
+            object_name=object_name,
+        )
+    except _STORAGE_ERRORS as exc:
+        raise _to_http(exc) from exc
+
+
+@router.get("/info")
+def get_file_info(
+    _session_id: Annotated[str, Depends(require_oauth_session)],
+    request: Request,
+    container: str,
+    object_name: str,
+) -> ObjectInfo:
+    """Retrieve metadata information for a specific file."""
+    try:
+        return _get_storage_client(request).get_file_info(
+            container=container,
+            object_name=object_name,
+        )
+    except _STORAGE_ERRORS as exc:
+        raise _to_http(exc) from exc

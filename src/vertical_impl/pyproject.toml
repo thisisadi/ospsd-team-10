@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "AWS S3 implementation of the Cloud Storage client interface"
 requires-python = ">=3.11"
 dependencies = [
-  "vertical-api",
   "boto3>=1.34.0",
   "python-dotenv>=1.2.2",
   "requests>=2.32.5",
