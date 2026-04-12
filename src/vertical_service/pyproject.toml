@@ -5,11 +5,11 @@ description = "FastAPI deployment unit for the cloud storage client (OAuth + sto
 requires-python = ">=3.11"
 dependencies = [
   "vertical-adapter",
-  "vertical-api",
   "fastapi>=0.115.0",
   "itsdangerous>=2.2.0",
   "vertical-impl",
   "uvicorn[standard]>=0.32.0",
+  "python-multipart>=0.0.26",
 ]
 
 [tool.uv]

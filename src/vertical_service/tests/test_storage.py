@@ -1,198 +1,231 @@
+# ruff: noqa: ARG002
 """Tests for storage endpoints."""
 
 from __future__ import annotations
 
-from collections.abc import Generator, Iterator  # noqa: TC003
+from io import BytesIO
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+from cloud_storage_api import CloudStorageClient
+from cloud_storage_api.exceptions import ObjectNotFoundError, StorageBackendError
+from cloud_storage_api.models import DeleteResult, ObjectInfo
 from fastapi.testclient import TestClient
-from vertical_api.client import (
-    Client,
-    DeleteResult,
-    ObjectNotFoundError,
-    StorageOperationFailedError,
-    UploadResult,
-)
 from vertical_impl.token_store import TokenData, store_token
 from vertical_service.app import create_app
 from vertical_service.deps import require_oauth_session
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from fastapi import FastAPI
 
 pytestmark = pytest.mark.unit
 
 _MSG_NO_BUCKET = "no bucket"
 _MSG_S3_DOWN = "s3 down"
 
+_FAKE_OBJECT_INFO = ObjectInfo(
+    object_name="path/to/obj",
+    size_bytes=5,
+    integrity="etag123",
+)
 
-class _FakeClient(Client):
+
+class _FakeClient(CloudStorageClient):
     """Minimal fake used only to assert routing and DI wiring."""
 
     def __init__(self) -> None:
-        self.last_upload: tuple[str, str, bytes] | None = None
+        self.last_upload: tuple[str, object, str] | None = None
 
-    def upload_object(self, container_name: str, object_name: str, data: bytes) -> UploadResult:
-        self.last_upload = (container_name, object_name, data)
-        return UploadResult(
-            success=True,
-            container_name=container_name,
-            object_key=object_name,
-        )
+    def upload_file(self, container: str, local_path: str, remote_path: str) -> ObjectInfo:
+        self.last_upload = (container, local_path, remote_path)
+        return ObjectInfo(object_name=remote_path)
 
-    def download_object(self, _container_name: str, _object_name: str) -> bytes:
-        return b"payload"
+    def upload_obj(self, container: str, file_obj: object, remote_path: str) -> ObjectInfo:
+        self.last_upload = (container, file_obj, remote_path)
+        return ObjectInfo(object_name=remote_path)
 
-    def delete_object(self, _container_name: str, object_name: str) -> DeleteResult:
-        return DeleteResult(success=True, object_key=object_name)
+    def download_file(self, container: str, object_name: str, file_name: str) -> ObjectInfo:
+        with Path(file_name).open("wb") as f:
+            f.write(b"payload")
+        return ObjectInfo(object_name=object_name)
 
-    def list_objects(self, _container_name: str) -> Generator[str, None, None]:
-        yield from ["a.txt", "b.txt"]
+    def list_files(self, container: str, prefix: str) -> list[ObjectInfo]:
+        return [ObjectInfo(object_name="a.txt"), ObjectInfo(object_name="b.txt")]
+
+    def delete_file(self, container: str, object_name: str) -> DeleteResult:
+        return DeleteResult(deleted=True, version_id=None, request_charged=None)
+
+    def get_file_info(self, container: str, object_name: str) -> ObjectInfo:
+        return ObjectInfo(object_name=object_name)
+
+
+def _make_authenticated_app(
+    fake: CloudStorageClient,
+) -> tuple[TestClient, FastAPI]:
+    """Wire a fake storage client into the app and bypass OAuth."""
+    app = create_app()
+    app.state.storage_client = fake
+    store_token(
+        "test-session",
+        TokenData(access_token="test-access-token", token_type="Bearer", expires_at=None),  # noqa: S106
+    )
+    app.dependency_overrides[require_oauth_session] = lambda: "test-session"
+    return TestClient(app), app
 
 
 @pytest.fixture
-def authenticated_app_client(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Generator[tuple[TestClient, _FakeClient], None, None]:
+def authenticated_app_client() -> Generator[tuple[TestClient, _FakeClient], None, None]:
     """App with OAuth dependency bypassed and a fake storage client."""
     fake = _FakeClient()
-    monkeypatch.setattr("vertical_service.routes.storage.get_client", lambda: fake)
-
-    app = create_app()
-    store_token(
-        "test-session",
-        TokenData(
-            access_token="test-access-token",  # noqa: S106
-            token_type="Bearer",  # noqa: S106
-            expires_at=None,
-        ),
-    )
-    app.dependency_overrides[require_oauth_session] = lambda: "test-session"
-    client = TestClient(app)
+    client, app = _make_authenticated_app(fake)
     yield client, fake
     app.dependency_overrides.clear()
 
 
+# -----------------------------
+# Auth guard
+# -----------------------------
 def test_storage_list_requires_session_when_not_overridden() -> None:
     """Without OAuth completion, storage routes return 401."""
     client = TestClient(create_app())
-    response = client.get("/storage/my-bucket/objects")
+    response = client.get("/storage/files/list?container=my-bucket")
     assert response.status_code == 401
 
 
-def test_storage_list_returns_json_names(authenticated_app_client: tuple[TestClient, _FakeClient]) -> None:
-    """GET /storage/{container}/objects lists keys via get_client()."""
-    client, _fake = authenticated_app_client
-    response = client.get("/storage/my-bucket/objects")
+# -----------------------------
+# list_files
+# -----------------------------
+def test_storage_list_returns_json_names(
+    authenticated_app_client: tuple[TestClient, _FakeClient],
+) -> None:
+    client, _ = authenticated_app_client
+    response = client.get("/storage/files/list?container=my-bucket")
     assert response.status_code == 200
-    assert response.json() == ["a.txt", "b.txt"]
+    names = [obj["object_name"] for obj in response.json()]
+    assert names == ["a.txt", "b.txt"]
 
 
-def test_storage_download_returns_bytes(authenticated_app_client: tuple[TestClient, _FakeClient]) -> None:
-    """GET /storage/{container}/objects/{key} returns octet stream."""
-    client, _fake = authenticated_app_client
-    response = client.get("/storage/my-bucket/objects/folder/file.bin")
+# -----------------------------
+# download_file
+# -----------------------------
+def test_storage_download_returns_bytes(
+    authenticated_app_client: tuple[TestClient, _FakeClient],
+) -> None:
+    client, _ = authenticated_app_client
+    response = client.get("/storage/files/download?container=my-bucket&object_name=folder/file.bin")
     assert response.status_code == 200
     assert response.content == b"payload"
 
 
-def test_storage_upload_forwards_body(authenticated_app_client: tuple[TestClient, _FakeClient]) -> None:
-    """POST uploads raw body to upload_object."""
+# -----------------------------
+# upload_obj
+# -----------------------------
+def test_storage_upload_forwards_body(
+    authenticated_app_client: tuple[TestClient, _FakeClient],
+) -> None:
     client, fake = authenticated_app_client
     response = client.post(
-        "/storage/my-bucket/objects/path/to/obj",
-        content=b"hello",
-        headers={"Content-Type": "application/octet-stream"},
+        "/storage/files/upload?container=my-bucket&remote_path=path/to/obj",
+        files={"file": ("obj", BytesIO(b"hello"), "application/octet-stream")},
     )
     assert response.status_code == 201
-    assert fake.last_upload == ("my-bucket", "path/to/obj", b"hello")
+    assert fake.last_upload is not None
+    assert fake.last_upload[0] == "my-bucket"
+    assert fake.last_upload[2] == "path/to/obj"
 
 
-def test_storage_delete_returns_flag(authenticated_app_client: tuple[TestClient, _FakeClient]) -> None:
-    """DELETE returns JSON with deleted flag."""
-    client, _fake = authenticated_app_client
-    response = client.delete("/storage/my-bucket/objects/x")
+# -----------------------------
+# delete_file
+# -----------------------------
+def test_storage_delete_returns_flag(
+    authenticated_app_client: tuple[TestClient, _FakeClient],
+) -> None:
+    client, _ = authenticated_app_client
+    response = client.delete("/storage/files/delete?container=my-bucket&object_name=x")
     assert response.status_code == 200
-    assert response.json() == {"deleted": True}
+    assert response.json()["deleted"] is True
 
 
-class _NotFoundClient(Client):
-    """Client that raises port errors for route mapping tests."""
+# -----------------------------
+# get_file_info
+# -----------------------------
+def test_storage_get_file_info(
+    authenticated_app_client: tuple[TestClient, _FakeClient],
+) -> None:
+    client, _ = authenticated_app_client
+    response = client.get("/storage/files/info?container=my-bucket&object_name=file.txt")
+    assert response.status_code == 200
+    assert response.json()["object_name"] == "file.txt"
 
-    def upload_object(self, *_a: object, **_k: object) -> UploadResult:
-        return UploadResult(success=True, container_name="", object_key="")
 
-    def download_object(self, *_a: object, **_k: object) -> bytes:
-        return b""
+# -----------------------------
+# Error mapping — ObjectNotFoundError
+# -----------------------------
+class _NotFoundClient(CloudStorageClient):
+    def upload_file(self, container: str, local_path: str, remote_path: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
 
-    def delete_object(self, *_a: object, **_k: object) -> DeleteResult:
-        return DeleteResult(success=True, object_key="")
+    def upload_obj(self, container: str, file_obj: object, remote_path: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
 
-    def list_objects(self, _container_name: str) -> Iterator[str]:
+    def download_file(self, container: str, object_name: str, file_name: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
+
+    def delete_file(self, container: str, object_name: str) -> DeleteResult:
+        return DeleteResult(deleted=True, version_id=None, request_charged=None)
+
+    def get_file_info(self, container: str, object_name: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
+
+    def list_files(self, container: str, prefix: str) -> list[ObjectInfo]:
         raise ObjectNotFoundError(_MSG_NO_BUCKET)
 
 
 @pytest.fixture
-def client_with_not_found(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
-    """App wired to a client that raises ObjectNotFoundError on list."""
-
-    def _factory() -> _NotFoundClient:
-        return _NotFoundClient()
-
-    monkeypatch.setattr("vertical_service.routes.storage.get_client", _factory)
-    app = create_app()
-    store_token(
-        "test-session",
-        TokenData(
-            access_token="test-access-token",  # noqa: S106
-            token_type="Bearer",  # noqa: S106
-            expires_at=None,
-        ),
-    )
-    app.dependency_overrides[require_oauth_session] = lambda: "test-session"
-    tc = TestClient(app)
+def client_with_not_found() -> Generator[TestClient, None, None]:
+    tc, app = _make_authenticated_app(_NotFoundClient())
     yield tc
     app.dependency_overrides.clear()
 
 
 def test_storage_list_maps_object_not_found(client_with_not_found: TestClient) -> None:
-    """ObjectNotFoundError from the impl should become HTTP 404."""
-    response = client_with_not_found.get("/storage/missing/objects")
+    response = client_with_not_found.get("/storage/files/list?container=missing")
     assert response.status_code == 404
 
 
-class _FailingDownloadClient(Client):
-    def upload_object(self, c: str, o: str, _data: bytes) -> UploadResult:
-        return UploadResult(success=True, container_name=c, object_key=o)
+# -----------------------------
+# Error mapping — StorageBackendError
+# -----------------------------
+class _FailingDownloadClient(CloudStorageClient):
+    def upload_file(self, container: str, local_path: str, remote_path: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
 
-    def list_objects(self, _container_name: str) -> Generator[str, None, None]:
-        yield from ()
+    def upload_obj(self, container: str, file_obj: object, remote_path: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
 
-    def delete_object(self, _c: str, o: str) -> DeleteResult:
-        return DeleteResult(success=True, object_key=o)
+    def list_files(self, container: str, prefix: str) -> list[ObjectInfo]:
+        return []
 
-    def download_object(self, *_a: object, **_k: object) -> bytes:
-        raise StorageOperationFailedError(_MSG_S3_DOWN)
+    def delete_file(self, container: str, object_name: str) -> DeleteResult:
+        return DeleteResult(deleted=True, version_id=None, request_charged=None)
+
+    def get_file_info(self, container: str, object_name: str) -> ObjectInfo:
+        return ObjectInfo(object_name="")
+
+    def download_file(self, container: str, object_name: str, file_name: str) -> ObjectInfo:
+        raise StorageBackendError(_MSG_S3_DOWN)
 
 
 @pytest.fixture
-def client_with_failed_download(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
-    def _factory() -> _FailingDownloadClient:
-        return _FailingDownloadClient()
-
-    monkeypatch.setattr("vertical_service.routes.storage.get_client", _factory)
-    app = create_app()
-    store_token(
-        "test-session",
-        TokenData(
-            access_token="test-access-token",  # noqa: S106
-            token_type="Bearer",  # noqa: S106
-            expires_at=None,
-        ),
-    )
-    app.dependency_overrides[require_oauth_session] = lambda: "test-session"
-    tc = TestClient(app)
+def client_with_failed_download() -> Generator[TestClient, None, None]:
+    tc, app = _make_authenticated_app(_FailingDownloadClient())
     yield tc
     app.dependency_overrides.clear()
 
 
-def test_storage_download_maps_storage_operation_failed(client_with_failed_download: TestClient) -> None:
-    response = client_with_failed_download.get("/storage/b/objects/file.txt")
+def test_storage_download_maps_storage_backend_error(client_with_failed_download: TestClient) -> None:
+    response = client_with_failed_download.get("/storage/files/download?container=b&object_name=file.txt")
     assert response.status_code == 502

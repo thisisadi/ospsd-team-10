@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     working_directory: ~/project
     steps:
       - checkout
@@ -20,7 +20,7 @@ jobs:
           name: Create venv & install deps via uv
           command: |
             source $BASH_ENV
-            uv venv --python 3.11 --clear
+            uv venv --python 3.12 --clear
             source .venv/bin/activate
             uv sync --all-packages --group dev --verbose
 
@@ -41,7 +41,7 @@ jobs:
 
   lint:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     working_directory: ~/project
     steps:
       - attach_workspace:
@@ -55,7 +55,7 @@ jobs:
 
   typecheck:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     working_directory: ~/project
     steps:
       - attach_workspace:
@@ -64,12 +64,12 @@ jobs:
           name: MyPy (strict)
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_api/src:$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
+            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
             uv run mypy .
 
   test_unit_integration:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     working_directory: ~/project
     steps:
       - attach_workspace:
@@ -83,10 +83,9 @@ jobs:
           name: Run unit + integration tests (skip e2e)
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_api/src:$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
-            uv run pytest tests src -m "not e2e" \
+            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
+            uv run pytest -m "not e2e" \
               --junitxml=test-results/unit_integration/junit.xml -v \
-              --cov=vertical_api \
               --cov=vertical_adapter \
               --cov=vertical_service \
               --cov=vertical_impl \
@@ -107,7 +106,7 @@ jobs:
 
   test_e2e_optional:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     working_directory: ~/project
     steps:
       - attach_workspace:
@@ -121,10 +120,10 @@ jobs:
           name: Run e2e tests only if AWS env vars exist
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_api/src:$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
+            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
             if [ -n "${AWS_S3_BUCKET}" ] && [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
               echo "AWS env vars detected. Running e2e tests..."
-              uv run pytest tests src -m "e2e" \
+              uv run pytest -m "e2e" \
                 --junitxml=test-results/e2e/junit.xml -v \
                 --no-cov
             else
@@ -153,7 +152,7 @@ jobs:
 
   deploy_docs:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.12
     working_directory: ~/project
     steps:
       - attach_workspace:
@@ -174,7 +173,7 @@ jobs:
           name: Install docs dependencies
           command: |
             source $BASH_ENV
-            uv venv --python 3.11 --clear
+            uv venv --python 3.12 --clear
             source .venv/bin/activate
             uv sync --all-packages --group dev
 

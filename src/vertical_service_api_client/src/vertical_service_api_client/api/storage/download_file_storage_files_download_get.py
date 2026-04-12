@@ -1,29 +1,32 @@
 from http import HTTPStatus
 from typing import Any
-from urllib.parse import quote
 
 import httpx
 
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
-from ...types import Response
+from ...types import UNSET, Response
 
 
 def _get_kwargs(
-    container_name: str,
-    object_key: str,
     *,
-    content: bytes,
+    container: str,
+    object_name: str,
 ) -> dict[str, Any]:
 
+    params: dict[str, Any] = {}
+
+    params["container"] = container
+
+    params["object_name"] = object_name
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
     _kwargs: dict[str, Any] = {
-        "method": "post",
-        "url": "/storage/{container_name}/objects/{object_key}".format(
-            container_name=quote(str(container_name), safe=""),
-            object_key=quote(str(object_key), safe=""),
-        ),
-        "content": content,
+        "method": "get",
+        "url": "/storage/files/download",
+        "params": params,
     }
 
     return _kwargs
@@ -32,9 +35,9 @@ def _get_kwargs(
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
 ) -> Any | HTTPValidationError | None:
-    if response.status_code == 201:
-        response_201 = response.json()
-        return response_201
+    if response.status_code == 200:
+        response_200 = response.json()
+        return response_200
 
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
@@ -59,20 +62,18 @@ def _build_response(
 
 
 def sync_detailed(
-    container_name: str,
-    object_key: str,
     *,
-    content: bytes,
     client: AuthenticatedClient | Client,
+    container: str,
+    object_name: str,
 ) -> Response[Any | HTTPValidationError]:
-    """Upload Object
+    """Download File
 
-     Upload raw bytes as an object (same contract as Client.upload_object).
+     Download a file from cloud storage (maps to CloudStorageClient.download_file).
 
     Args:
-        container_name (str):
-        object_key (str):
-        content (bytes): Raw object body.
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -83,9 +84,8 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
-        container_name=container_name,
-        object_key=object_key,
-        content=content,
+        container=container,
+        object_name=object_name,
     )
 
     response = client.get_httpx_client().request(
@@ -96,20 +96,18 @@ def sync_detailed(
 
 
 def sync(
-    container_name: str,
-    object_key: str,
     *,
-    content: bytes,
     client: AuthenticatedClient | Client,
+    container: str,
+    object_name: str,
 ) -> Any | HTTPValidationError | None:
-    """Upload Object
+    """Download File
 
-     Upload raw bytes as an object (same contract as Client.upload_object).
+     Download a file from cloud storage (maps to CloudStorageClient.download_file).
 
     Args:
-        container_name (str):
-        object_key (str):
-        content (bytes): Raw object body.
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -120,28 +118,25 @@ def sync(
     """
 
     return sync_detailed(
-        container_name=container_name,
-        object_key=object_key,
-        content=content,
         client=client,
+        container=container,
+        object_name=object_name,
     ).parsed
 
 
 async def asyncio_detailed(
-    container_name: str,
-    object_key: str,
     *,
-    content: bytes,
     client: AuthenticatedClient | Client,
+    container: str,
+    object_name: str,
 ) -> Response[Any | HTTPValidationError]:
-    """Upload Object
+    """Download File
 
-     Upload raw bytes as an object (same contract as Client.upload_object).
+     Download a file from cloud storage (maps to CloudStorageClient.download_file).
 
     Args:
-        container_name (str):
-        object_key (str):
-        content (bytes): Raw object body.
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -152,9 +147,8 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
-        container_name=container_name,
-        object_key=object_key,
-        content=content,
+        container=container,
+        object_name=object_name,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -163,20 +157,18 @@ async def asyncio_detailed(
 
 
 async def asyncio(
-    container_name: str,
-    object_key: str,
     *,
-    content: bytes,
     client: AuthenticatedClient | Client,
+    container: str,
+    object_name: str,
 ) -> Any | HTTPValidationError | None:
-    """Upload Object
+    """Download File
 
-     Upload raw bytes as an object (same contract as Client.upload_object).
+     Download a file from cloud storage (maps to CloudStorageClient.download_file).
 
     Args:
-        container_name (str):
-        object_key (str):
-        content (bytes): Raw object body.
+        container (str):
+        object_name (str):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -188,9 +180,8 @@ async def asyncio(
 
     return (
         await asyncio_detailed(
-            container_name=container_name,
-            object_key=object_key,
-            content=content,
             client=client,
+            container=container,
+            object_name=object_name,
         )
     ).parsed

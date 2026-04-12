@@ -90,7 +90,7 @@ def test_service_openapi_blackbox(running_service: tuple[str, subprocess.Popen[s
     assert "/health" in paths
     assert "/auth/login" in paths
     assert "/auth/callback" in paths
-    assert "/storage/{container_name}/objects" in paths
+    assert "/storage/files/upload" in paths
 
 
 @pytest.mark.e2e
@@ -98,5 +98,5 @@ def test_service_storage_requires_auth_blackbox(running_service: tuple[str, subp
     """Storage endpoint returns 401 without an authenticated session."""
     base_url, _process = running_service
     with pytest.raises(error.HTTPError) as exc_info:
-        request.urlopen(f"{base_url}/storage/test-bucket/objects", timeout=5)  # noqa: S310
+        request.urlopen(f"{base_url}/storage/files/list?container=test-bucket", timeout=5)  # noqa: S310
     assert exc_info.value.code == 401

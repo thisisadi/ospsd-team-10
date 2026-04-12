@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from vertical_api.client import MissingCredentialsError
+from cloud_storage_api.exceptions import AuthenticationError
 
 _MISSING_S3_BUCKET_MSG = "Missing required env var: AWS_S3_BUCKET"
 
@@ -25,7 +25,7 @@ def load_s3_config_from_env() -> S3Config:
     """
     bucket = os.environ.get("AWS_S3_BUCKET")
     if not bucket:
-        raise MissingCredentialsError(_MISSING_S3_BUCKET_MSG)
+        raise AuthenticationError(_MISSING_S3_BUCKET_MSG)
 
     region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
 
