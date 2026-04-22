@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Annotated
@@ -21,6 +22,12 @@ from cloud_storage_api.models import DeleteResult, ObjectInfo
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
 
 from vertical_service.deps import require_oauth_session
+from vertical_service.metrics import (
+    FAILURE_COUNT,
+    REQUEST_COUNT,
+    REQUEST_LATENCY,
+    SUCCESS_COUNT,
+)
 
 router = APIRouter(prefix="/files")
 
@@ -70,14 +77,26 @@ async def upload_file(
     file: UploadFile,
 ) -> ObjectInfo:
     """Upload a file to the specified container and path."""
+    endpoint = "/storage/files/upload"
+    method = "POST"
+    REQUEST_COUNT.labels(endpoint=endpoint, method=method).inc()
+    start_time = time.perf_counter()
+
     try:
-        return _get_storage_client(request).upload_obj(
+        result = _get_storage_client(request).upload_obj(
             container=container,
             file_obj=file.file,
             remote_path=remote_path,
         )
+        SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
+        return result
     except _STORAGE_ERRORS as exc:
+        FAILURE_COUNT.labels(endpoint=endpoint, method=method).inc()
         raise _to_http(exc) from exc
+    finally:
+        REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(
+            time.perf_counter() - start_time
+        )
 
 
 @router.get("/download")
@@ -88,6 +107,11 @@ def download_file(
     object_name: str,
 ) -> Response:
     """Download a file from storage and return its binary content."""
+    endpoint = "/storage/files/download"
+    method = "GET"
+    REQUEST_COUNT.labels(endpoint=endpoint, method=method).inc()
+    start_time = time.perf_counter()
+
     tmp_path: Path | None = None
     try:
         with NamedTemporaryFile(delete=False) as tmp:
@@ -99,10 +123,15 @@ def download_file(
         )
         with tmp_path.open("rb") as f:
             content = f.read()
+        SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
         return Response(content=content, media_type="application/octet-stream")
     except _STORAGE_ERRORS as exc:
+        FAILURE_COUNT.labels(endpoint=endpoint, method=method).inc()
         raise _to_http(exc) from exc
     finally:
+        REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(
+            time.perf_counter() - start_time
+        )
         if tmp_path and tmp_path.exists():
             tmp_path.unlink()
 
@@ -115,13 +144,25 @@ def list_files(
     prefix: str = "",
 ) -> list[ObjectInfo]:
     """List files in a container with an optional prefix filter."""
+    endpoint = "/storage/files/list"
+    method = "GET"
+    REQUEST_COUNT.labels(endpoint=endpoint, method=method).inc()
+    start_time = time.perf_counter()
+
     try:
-        return _get_storage_client(request).list_files(
+        result = _get_storage_client(request).list_files(
             container=container,
             prefix=prefix,
         )
+        SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
+        return result
     except _STORAGE_ERRORS as exc:
+        FAILURE_COUNT.labels(endpoint=endpoint, method=method).inc()
         raise _to_http(exc) from exc
+    finally:
+        REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(
+            time.perf_counter() - start_time
+        )
 
 
 @router.delete("/delete")
@@ -132,13 +173,25 @@ def delete_file(
     object_name: str,
 ) -> DeleteResult:
     """Delete a file from the specified container."""
+    endpoint = "/storage/files/delete"
+    method = "DELETE"
+    REQUEST_COUNT.labels(endpoint=endpoint, method=method).inc()
+    start_time = time.perf_counter()
+
     try:
-        return _get_storage_client(request).delete_file(
+        result = _get_storage_client(request).delete_file(
             container=container,
             object_name=object_name,
         )
+        SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
+        return result
     except _STORAGE_ERRORS as exc:
+        FAILURE_COUNT.labels(endpoint=endpoint, method=method).inc()
         raise _to_http(exc) from exc
+    finally:
+        REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(
+            time.perf_counter() - start_time
+        )
 
 
 @router.get("/info")
@@ -149,10 +202,22 @@ def get_file_info(
     object_name: str,
 ) -> ObjectInfo:
     """Retrieve metadata information for a specific file."""
+    endpoint = "/storage/files/info"
+    method = "GET"
+    REQUEST_COUNT.labels(endpoint=endpoint, method=method).inc()
+    start_time = time.perf_counter()
+
     try:
-        return _get_storage_client(request).get_file_info(
+        result = _get_storage_client(request).get_file_info(
             container=container,
             object_name=object_name,
         )
+        SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
+        return result
     except _STORAGE_ERRORS as exc:
+        FAILURE_COUNT.labels(endpoint=endpoint, method=method).inc()
         raise _to_http(exc) from exc
+    finally:
+        REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(
+            time.perf_counter() - start_time
+        )
