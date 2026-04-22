@@ -1,3 +1,5 @@
+"""Prometheus metrics for vertical service."""
+
 from prometheus_client import Counter, Histogram
 
 REQUEST_COUNT = Counter(

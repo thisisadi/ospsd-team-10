@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.middleware.sessions import SessionMiddleware
-
 from vertical_impl.client import S3CloudStorageClient
+
 from vertical_service.config import session_secret_key
 from vertical_service.routes import auth, health, storage
 

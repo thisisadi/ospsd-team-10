@@ -1,3 +1,5 @@
+"""E2E test configuration for storage service."""
+
 from __future__ import annotations
 
 import os
@@ -25,13 +27,16 @@ def _wait_for_health(base_url: str, timeout_seconds: float = 15.0) -> None:
     """Wait until /health responds with HTTP 200."""
     deadline = time.time() + timeout_seconds
     health_url = f"{base_url}/health"
+
     while time.time() < deadline:
         try:
             with request.urlopen(health_url, timeout=1) as response:  # noqa: S310
-                if response.status == 200:
+                http_ok = 200
+                if response.status == http_ok:
                     return
         except (error.URLError, OSError):
             time.sleep(0.2)
+
     msg = f"Service did not become healthy in {timeout_seconds:.1f}s: {health_url}"
     raise RuntimeError(msg)
 
@@ -41,6 +46,7 @@ def running_service() -> Generator[tuple[str, subprocess.Popen[str]], None, None
     """Start vertical_service in a subprocess and yield its base URL."""
     port = _find_free_port()
     base_url = f"http://127.0.0.1:{port}"
+
     env = os.environ.copy()
     env["HOST"] = "127.0.0.1"
     env["PORT"] = str(port)

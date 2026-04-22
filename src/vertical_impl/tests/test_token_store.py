@@ -1,3 +1,5 @@
+# ruff: noqa: S106
+
 from datetime import UTC, datetime, timedelta
 
 from vertical_impl.token_store import (

@@ -3,17 +3,19 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi.testclient import TestClient
-
 from vertical_service.app import create_app
 from vertical_service.deps import require_oauth_session
 
 
 class DummyStorageClient:
     def list_files(self, container: str, prefix: str = "") -> list[dict[str, Any]]:
+        _ = container
+        _ = prefix
         return []
 
 
 def test_metrics_endpoint() -> None:
+    """Validate /metrics endpoint exposes required Prometheus metrics."""
     app = create_app()
     client = TestClient(app)
 
@@ -27,6 +29,7 @@ def test_metrics_endpoint() -> None:
 
 
 def test_metrics_updated_after_list_request() -> None:
+    """Ensure metrics increment after storage list call."""
     app = create_app()
 
     # bypass auth
