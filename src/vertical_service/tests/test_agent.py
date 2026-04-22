@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -39,7 +40,7 @@ class _FakeCompletion:
 class _FakeCompletions:
     def __init__(self, replies: list[_FakeMessage]) -> None:
         self._replies = list(replies)
-        self.calls: list[dict] = []
+        self.calls: list[dict[str, Any]] = []
 
     def create(self, **kwargs: object) -> _FakeCompletion:
         self.calls.append(kwargs)
