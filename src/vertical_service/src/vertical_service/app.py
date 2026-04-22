@@ -7,8 +7,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from vertical_impl.client import S3CloudStorageClient
 
 import http_chat_client_impl  # noqa: F401 — registers Team 9 HTTP chat client for chat_client_api.get_client()
+from openai_ai_client_impl import OpenAIAIClient
 from vertical_service.config import session_secret_key
-from vertical_service.routes import auth, health, storage
+from vertical_service.routes import agent, auth, health, storage
 
 
 def create_app() -> FastAPI:
@@ -22,7 +23,13 @@ def create_app() -> FastAPI:
     app.include_router(health.router, tags=["health"])
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(storage.router, prefix="/storage", tags=["storage"])
+    app.include_router(agent.router, tags=["agent"])
 
     app.state.storage_client = S3CloudStorageClient()
+
+    try:
+        app.state.ai_client = OpenAIAIClient()
+    except RuntimeError:
+        app.state.ai_client = None
 
     return app

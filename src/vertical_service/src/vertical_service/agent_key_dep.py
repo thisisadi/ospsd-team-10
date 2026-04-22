@@ -18,7 +18,7 @@ from vertical_service.agent_api import (
 
 def verify_api_key(
     x_api_key: Annotated[str | None, Header(alias=HTTP_HEADER_X_API_KEY)] = None,
-) -> None:
+) -> str:
     """Validate the ``X-API-Key`` header against :envvar:`AGENT_API_KEY` for service-to-service calls to ``/agent``."""
     expected_raw = os.environ.get(ENV_AGENT_API_KEY, "")
     expected = expected_raw.strip()
@@ -32,3 +32,4 @@ def verify_api_key(
             status.HTTP_401_UNAUTHORIZED,
             detail=MSG_INVALID_OR_MISSING_KEY,
         )
+    return x_api_key

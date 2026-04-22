@@ -8,6 +8,8 @@ dependencies = [
 
 [tool.uv.workspace]
 members = [
+  "src/ai_client_api",
+  "src/openai_ai_client_impl",
   "src/vertical_service_api_client",
   "src/vertical_adapter",
   "src/vertical_service",
@@ -18,6 +20,8 @@ members = [
 ]
 
 [tool.uv.sources]
+ai-client-api = { workspace = true }
+openai-ai-client-impl = { workspace = true }
 vertical-service-api-client = { workspace = true }
 vertical-adapter = { workspace = true }
 vertical-service = { workspace = true }
@@ -46,6 +50,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/vertical_service/src/vertical_service/agent.py" = ["TC001", "TC002", "TC003"]
+"src/vertical_service/src/vertical_service/routes/agent.py" = ["TC002"]
+"src/openai_ai_client_impl/src/openai_ai_client_impl/client.py" = ["TC003"]
 "**/test_*.py" = [
   "D100",
   "D101",
@@ -65,6 +72,8 @@ ignore = [
 strict = true
 explicit_package_bases = true
 mypy_path = [
+  "src/ai_client_api/src",
+  "src/openai_ai_client_impl/src",
   "src/vertical_service_api_client/src",
   "src/vertical_adapter/src",
   "src/vertical_service/src",
@@ -114,6 +123,8 @@ omit = [
   "*/__main__.py",
   "src/vertical_service_api_client/src/*",
   "*/agent_key_dep.py",
+  "src/ai_client_api/src/*",
+  "src/openai_ai_client_impl/src/*",
 ]
 
 [tool.coverage.report]
