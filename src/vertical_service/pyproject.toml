@@ -8,6 +8,7 @@ dependencies = [
   "fastapi>=0.115.0",
   "itsdangerous>=2.2.0",
   "vertical-impl",
+  "http-chat-client-impl",
   "uvicorn[standard]>=0.32.0",
   "python-multipart>=0.0.26",
 ]
@@ -24,3 +25,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv.sources]
+http-chat-client-impl = { workspace = true }

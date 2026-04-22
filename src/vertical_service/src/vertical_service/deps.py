@@ -5,7 +5,11 @@ from __future__ import annotations
 from fastapi import HTTPException, Request, status
 from vertical_impl.token_store import get_token
 
+from vertical_service import agent_key_dep
 from vertical_service.sessions import OAUTH_SESSION_ID_KEY
+
+# Re-export for `from vertical_service.deps import verify_api_key`
+verify_api_key = agent_key_dep.verify_api_key
 
 
 def require_oauth_session(request: Request) -> str:

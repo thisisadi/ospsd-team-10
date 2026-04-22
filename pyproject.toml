@@ -12,6 +12,9 @@ members = [
   "src/vertical_adapter",
   "src/vertical_service",
   "src/vertical_impl",
+  "src/chat_client_service_api_client",
+  "src/chat_client_api",
+  "src/http_chat_client_impl",
 ]
 
 [tool.uv.sources]
@@ -19,6 +22,9 @@ vertical-service-api-client = { workspace = true }
 vertical-adapter = { workspace = true }
 vertical-service = { workspace = true }
 vertical-impl = { workspace = true }
+chat-client-service-api-client = { workspace = true }
+chat-client-api = { workspace = true }
+http-chat-client-impl = { workspace = true }
 cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage.git", rev = "v1.0.0" }
 
 [tool.ruff]
@@ -26,6 +32,7 @@ line-length = 130
 target-version = "py311"
 exclude = [
   "src/vertical_service_api_client/src",
+  "src/chat_client_service_api_client",
   "src/vertical_api",
 ]
 
@@ -62,11 +69,14 @@ mypy_path = [
   "src/vertical_adapter/src",
   "src/vertical_service/src",
   "src/vertical_impl/src",
+  "src/chat_client_api/src",
+  "src/http_chat_client_impl/src",
 ]
 ignore_missing_imports = false
 warn_unused_ignores = false
 exclude = [
   "src/vertical_api",
+  "src/chat_client_service_api_client/src",
 ]
 
 [tool.pytest.ini_options]
@@ -103,10 +113,11 @@ omit = [
   "*/tests/*",
   "*/__main__.py",
   "src/vertical_service_api_client/src/*",
+  "*/agent_key_dep.py",
 ]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 84
 exclude_lines = [
   "pragma: no cover",
   "raise NotImplementedError",

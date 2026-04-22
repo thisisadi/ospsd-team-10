@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 from vertical_impl.client import S3CloudStorageClient
 
+import http_chat_client_impl  # noqa: F401 — registers Team 9 HTTP chat client for chat_client_api.get_client()
 from vertical_service.config import session_secret_key
 from vertical_service.routes import auth, health, storage
 
