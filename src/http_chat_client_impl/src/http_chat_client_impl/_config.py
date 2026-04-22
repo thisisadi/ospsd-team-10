@@ -5,9 +5,7 @@ from __future__ import annotations
 ENV_CHAT_SERVICE_BASE_URL = "CHAT_SERVICE_BASE_URL"
 ENV_CHAT_SESSION_ID = "CHAT_SESSION_ID"
 
-MSG_MISSING_BASE = (
-    f"{ENV_CHAT_SERVICE_BASE_URL} must be set to the base URL of the Team 9 chat service (no trailing slash)."
-)
+MSG_MISSING_BASE = f"{ENV_CHAT_SERVICE_BASE_URL} must be set to the base URL of the Team 9 chat service (no trailing slash)."
 MSG_MISSING_SESSION = (
     f"{ENV_CHAT_SESSION_ID} must be set to a valid OAuth session id from the Team 9 service "
     "(/auth/sessions). Sessions are in-memory and reset when their server restarts; obtain a new id and update env."
