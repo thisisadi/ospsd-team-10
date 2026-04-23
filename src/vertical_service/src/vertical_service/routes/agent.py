@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import os
 from typing import Annotated, Any
 
 from cloud_storage_api import CloudStorageClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from chat_client_api import ChatServiceError, send_agent_response
 from openai_ai_client_impl import OpenAIAIClient
 from vertical_service.agent import default_storage_container, run_agent_turn
+from vertical_service.deps import verify_api_key
 
 router = APIRouter()
 
@@ -29,18 +30,7 @@ class AgentResponse(BaseModel):
 
     reply: str
     channel_id: str | None = None
-
-
-def _require_service_key(request: Request) -> None:
-    expected = os.environ.get("AGENT_SERVICE_KEY")
-    if not expected:
-        return
-    presented = request.headers.get("X-Service-Key")
-    if presented != expected:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-Service-Key.",
-        )
+    sent_message_id: str | None = None
 
 
 def _get_openai_client(request: Request) -> OpenAIAIClient:
@@ -65,13 +55,12 @@ def _get_storage(request: Request) -> CloudStorageClient:
 
 @router.post("/agent", response_model=AgentResponse)
 def agent_endpoint(
-    request: Request,
     body: AgentRequest,
+    _verified: Annotated[str, Depends(verify_api_key)],
     storage: Annotated[CloudStorageClient, Depends(_get_storage)],
     ai: Annotated[OpenAIAIClient, Depends(_get_openai_client)],
 ) -> AgentResponse:
     """Run prompt/action routing and tool-assisted completion; return text for the chat layer."""
-    _require_service_key(request)
     try:
         container = default_storage_container(body.container)
     except RuntimeError as exc:
@@ -88,4 +77,18 @@ def agent_endpoint(
         container=container,
         request_context=ctx,
     )
-    return AgentResponse(reply=reply, channel_id=body.channel_id)
+    sent_message_id: str | None = None
+    if body.channel_id:
+        try:
+            sent_message_id = send_agent_response(body.channel_id, reply)
+        except ChatServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(exc),
+            ) from exc
+
+    return AgentResponse(
+        reply=reply,
+        channel_id=body.channel_id,
+        sent_message_id=sent_message_id,
+    )
