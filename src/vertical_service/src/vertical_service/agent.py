@@ -7,14 +7,28 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Literal, cast
+from typing import Any, Literal, Protocol, cast
 
-from ai_client_api.client import AIClient
 from cloud_storage_api import CloudStorageClient
 from cloud_storage_api.exceptions import StorageBackendError
 from cloud_storage_api.models import ObjectInfo
 
-from openai_ai_client_impl import OpenAIAIClient
+
+class AIClient(Protocol):
+    """Minimal interface required from the AI client."""
+
+    def send_message(self, prompt: str) -> str:
+        """Return a text response for a plain prompt."""
+
+    def run_chat_with_tools(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        tools: list[dict[str, Any]],
+        tool_handler: Callable[[str, dict[str, Any]], str],
+    ) -> str:
+        """Run a tool-enabled chat turn and return the final response."""
 
 
 def _object_info_payload(info: ObjectInfo) -> dict[str, Any]:
@@ -23,6 +37,7 @@ def _object_info_payload(info: ObjectInfo) -> dict[str, Any]:
     if callable(md):
         raw = md()
         return cast("dict[str, Any]", raw)
+
     updated = getattr(info, "updated_at", None)
     updated_s: Any = updated.isoformat() if updated is not None and hasattr(updated, "isoformat") else updated
     return {
@@ -47,9 +62,10 @@ def summarize_and_send(  # noqa: PLR0913
     send: Callable[[str], None] | None = None,
     max_content_chars: int = 100_000,
 ) -> dict[str, Any]:
-    """Download an object, summarize it with the AI client, optionally deliver via ``send``, and return metadata."""
+    """Download an object, summarize it, optionally send it, and return metadata."""
     with NamedTemporaryFile(delete=False) as tmp:
         tmp_path = Path(tmp.name)
+
     try:
         storage.download_file(container=container, object_name=object_key, file_name=str(tmp_path))
         raw = tmp_path.read_bytes()
@@ -67,13 +83,15 @@ def summarize_and_send(  # noqa: PLR0913
         f"Object key: {object_key}\n\n{text}"
     )
     summary = ai_client.send_message(prompt)
+
     if send is not None:
         send(summary)
+
     return {"summary": summary, "object_key": object_key, "container": container}
 
 
 def _route_prompt(message: str) -> tuple[Literal["summarize_direct", "chat"], str | None]:
-    """Classify user text into a direct action or general chat (tool-assisted)."""
+    """Classify user text into a direct action or general chat."""
     stripped = message.strip()
     lower = stripped.lower()
     if lower.startswith("/summarize "):
@@ -83,7 +101,7 @@ def _route_prompt(message: str) -> tuple[Literal["summarize_direct", "chat"], st
 
 
 def storage_tool_definitions() -> list[dict[str, Any]]:
-    """OpenAI-compatible tool schemas for cloud storage operations."""
+    """Return tool schemas for cloud storage operations."""
     return [
         {
             "type": "function",
@@ -95,7 +113,7 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
                     "properties": {
                         "prefix": {
                             "type": "string",
-                            "description": "Key prefix filter; empty string lists all keys (subject to provider limits).",
+                            "description": "Key prefix filter; empty string lists all keys.",
                         },
                     },
                     "required": [],
@@ -110,7 +128,10 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "object_key": {"type": "string", "description": "Object key / path in the container."},
+                        "object_key": {
+                            "type": "string",
+                            "description": "Object key or path in the container.",
+                        },
                     },
                     "required": ["object_key"],
                 },
@@ -120,11 +141,14 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "summarize_storage_file",
-                "description": "Download and produce a natural-language summary of a stored file's contents.",
+                "description": "Download and summarize a stored file.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "object_key": {"type": "string", "description": "Object key to summarize."},
+                        "object_key": {
+                            "type": "string",
+                            "description": "Object key to summarize.",
+                        },
                     },
                     "required": ["object_key"],
                 },
@@ -139,6 +163,8 @@ def _make_tool_handler(
     container: str,
     ai_client: AIClient,
 ) -> Callable[[str, dict[str, Any]], str]:
+    """Build the storage tool dispatcher."""
+
     def _list_files(args: dict[str, Any]) -> str:
         prefix = args.get("prefix", "") if isinstance(args.get("prefix"), str) else ""
         files = storage.list_files(container, prefix)
@@ -183,7 +209,7 @@ def _make_tool_handler(
 
 
 def default_storage_container(explicit: str | None) -> str:
-    """Resolve bucket/container from request override or environment."""
+    """Resolve bucket or container from request override or environment."""
     if explicit:
         return explicit
     bucket = os.environ.get("AWS_S3_BUCKET")
@@ -197,11 +223,11 @@ def run_agent_turn(
     *,
     message: str,
     storage: CloudStorageClient,
-    ai: OpenAIAIClient,
+    ai: AIClient,
     container: str,
     request_context: dict[str, Any] | None = None,
 ) -> str:
-    """Handle one agent message: direct summarize shortcut or OpenAI tool loop."""
+    """Handle one agent message."""
     kind, object_key = _route_prompt(message)
     if kind == "summarize_direct" and object_key:
         out = summarize_and_send(
@@ -224,6 +250,6 @@ def run_agent_turn(
         system_prompt=system,
         user_message=message,
         tools=storage_tool_definitions(),
-        handle_tool=_make_tool_handler(storage=storage, container=container, ai_client=ai),
+        tool_handler=_make_tool_handler(storage=storage, container=container, ai_client=ai),
     )
     return str(reply)

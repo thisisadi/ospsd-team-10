@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import os
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol, cast
 
 from cloud_storage_api import CloudStorageClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from openai_ai_client_impl import OpenAIAIClient
-from vertical_service.agent import default_storage_container, run_agent_turn
+from vertical_service.agent import AIClient, default_storage_container, run_agent_turn
 
 router = APIRouter()
 
@@ -20,7 +19,7 @@ class AgentRequest(BaseModel):
 
     message: str = Field(..., min_length=1, description="End-user or bot-composed instruction text.")
     channel_id: str | None = Field(default=None, description="Chat channel; echoed back for downstream send_message.")
-    container: str | None = Field(default=None, description="Optional storage container (S3 bucket) override.")
+    container: str | None = Field(default=None, description="Optional storage container override.")
     context: dict[str, Any] | None = Field(default=None, description="Extra structured context from the chat platform.")
 
 
@@ -29,6 +28,23 @@ class AgentResponse(BaseModel):
 
     reply: str
     channel_id: str | None = None
+
+
+class SupportsAgentAI(Protocol):
+    """Minimal protocol for AI clients used by the agent flow."""
+
+    def send_message(self, prompt: str) -> str:
+        """Return a text response for a plain prompt."""
+
+    def run_chat_with_tools(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        tools: list[dict[str, Any]],
+        tool_handler: object,
+    ) -> str:
+        """Run a tool-enabled chat turn and return the final response."""
 
 
 def _require_service_key(request: Request) -> None:
@@ -43,19 +59,21 @@ def _require_service_key(request: Request) -> None:
         )
 
 
-def _get_openai_client(request: Request) -> OpenAIAIClient:
+def _get_openai_client(request: Request) -> SupportsAgentAI:
     raw = getattr(request.app.state, "ai_client", None)
     if raw is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI client is not configured (set OPENAI_API_KEY).",
+            detail="AI client is not configured.",
         )
-    if not isinstance(raw, OpenAIAIClient):
+
+    if not hasattr(raw, "send_message") or not hasattr(raw, "run_chat_with_tools"):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Configured AI client does not support agent tools.",
         )
-    return raw
+
+    return cast("SupportsAgentAI", raw)
 
 
 def _get_storage(request: Request) -> CloudStorageClient:
@@ -68,9 +86,9 @@ def agent_endpoint(
     request: Request,
     body: AgentRequest,
     storage: Annotated[CloudStorageClient, Depends(_get_storage)],
-    ai: Annotated[OpenAIAIClient, Depends(_get_openai_client)],
+    ai: Annotated[SupportsAgentAI, Depends(_get_openai_client)],
 ) -> AgentResponse:
-    """Run prompt/action routing and tool-assisted completion; return text for the chat layer."""
+    """Run prompt routing and tool-assisted completion; return text for the chat layer."""
     _require_service_key(request)
     try:
         container = default_storage_container(body.container)
@@ -84,7 +102,7 @@ def agent_endpoint(
     reply = run_agent_turn(
         message=body.message,
         storage=storage,
-        ai=ai,
+        ai=cast("AIClient", ai),
         container=container,
         request_context=ctx,
     )
