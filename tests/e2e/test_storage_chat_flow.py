@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 from urllib import error, request
 
 import pytest
 
 
 @pytest.mark.e2e
-def test_storage_chat_flow(running_service):
+def test_storage_chat_flow(running_service: tuple[str, Any]) -> None:
     base_url, _ = running_service
 
     # 1. Try accessing without auth → should fail
