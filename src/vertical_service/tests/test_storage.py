@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Never
+from types import MethodType
+from typing import TYPE_CHECKING, Any, Never, cast
 
 import pytest
 from cloud_storage_api.exceptions import ObjectNotFoundError, StorageBackendError
@@ -30,26 +31,41 @@ class _FakeClient:
     def __init__(self) -> None:
         self.last_upload: tuple[str, object, str] | None = None
 
-    def upload_file(self, container: str, local_path: str, remote_path: str) -> dict:
+    def upload_file(
+        self,
+        container: str,
+        local_path: str,
+        remote_path: str,
+    ) -> dict[str, Any]:
         self.last_upload = (container, local_path, remote_path)
         return {"object_name": remote_path}
 
-    def upload_obj(self, container: str, file_obj: object, remote_path: str) -> dict:
+    def upload_obj(
+        self,
+        container: str,
+        file_obj: object,
+        remote_path: str,
+    ) -> dict[str, Any]:
         self.last_upload = (container, file_obj, remote_path)
         return {"object_name": remote_path}
 
-    def download_file(self, container: str, object_name: str, file_name: str) -> dict:
+    def download_file(
+        self,
+        container: str,
+        object_name: str,
+        file_name: str,
+    ) -> dict[str, Any]:
         with Path(file_name).open("wb") as f:
             f.write(b"payload")
         return {"object_name": object_name}
 
-    def list_files(self, container: str, prefix: str) -> list[dict]:
+    def list_files(self, container: str, prefix: str) -> list[dict[str, Any]]:
         return [{"object_name": "a.txt"}, {"object_name": "b.txt"}]
 
-    def delete_file(self, container: str, object_name: str) -> dict:
+    def delete_file(self, container: str, object_name: str) -> dict[str, Any]:
         return {"deleted": True}
 
-    def get_file_info(self, container: str, object_name: str) -> dict:
+    def get_file_info(self, container: str, object_name: str) -> dict[str, Any]:
         return {"object_name": object_name}
 
 
@@ -128,7 +144,7 @@ def test_storage_get_file_info(
 
 
 class _NotFoundClient(_FakeClient):
-    def list_files(self, container: str, prefix: str) -> list[dict]:
+    def list_files(self, container: str, prefix: str) -> list[dict[str, Any]]:
         raise ObjectNotFoundError(_MSG_NO_BUCKET)
 
 
@@ -145,7 +161,12 @@ def test_storage_list_maps_object_not_found(client_with_not_found: TestClient) -
 
 
 class _FailingDownloadClient(_FakeClient):
-    def download_file(self, container: str, object_name: str, file_name: str) -> dict:
+    def download_file(
+        self,
+        container: str,
+        object_name: str,
+        file_name: str,
+    ) -> dict[str, Any]:
         raise StorageBackendError(_MSG_S3_DOWN)
 
 
@@ -174,14 +195,15 @@ def test_storage_full_route_coverage(
     assert client.get("/storage/files/download?container=test&object_name=x").status_code == 200
     assert client.delete("/storage/files/delete?container=test&object_name=x").status_code == 200
 
-    def boom_list(*_: object, **__: object) -> Never:
+    def boom_list(_self: _FakeClient, *_: object, **__: object) -> Never:
         raise ObjectNotFoundError(_MSG_FORCED_ERROR)
 
-    def boom_download(*_: object, **__: object) -> Never:
+    def boom_download(_self: _FakeClient, *_: object, **__: object) -> Never:
         raise StorageBackendError(_MSG_FORCED_ERROR)
 
-    fake.list_files = boom_list
-    fake.download_file = boom_download
+    mutable_fake = cast("Any", fake)
+    mutable_fake.list_files = MethodType(boom_list, fake)
+    mutable_fake.download_file = MethodType(boom_download, fake)
 
     assert client.get("/storage/files/list?container=test").status_code == 404
     assert client.get("/storage/files/download?container=test&object_name=x").status_code == 502

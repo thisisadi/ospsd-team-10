@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from vertical_impl.token_store import TokenData
 from vertical_service.app import create_app
@@ -18,7 +19,7 @@ pytestmark = pytest.mark.unit
 
 
 class _DummyRequest:
-    def __init__(self, session: dict) -> None:
+    def __init__(self, session: dict[str, object]) -> None:
         self.session = session
 
 
@@ -126,4 +127,4 @@ def test_auth_and_deps_full_execution(client: TestClient) -> None:
     assert response.status_code == 400
 
     with pytest.raises(HTTPException):
-        require_oauth_session(_DummyRequest({}))
+        require_oauth_session(cast("Request", _DummyRequest({})))

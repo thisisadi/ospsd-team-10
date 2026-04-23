@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from cloud_storage_api.exceptions import (
     AuthenticationError,
@@ -63,26 +63,20 @@ def _to_http(exc: BaseException) -> HTTPException:
 
 
 def _get_storage_client(request: Request) -> CloudStorageClient:
-    return request.app.state.storage_client
+    return cast("CloudStorageClient", request.app.state.storage_client)
 
 
-# -----------------------------
-# SAFE SERIALIZER (FIXED ANN401)
-# -----------------------------
-def _serialize(obj: object) -> dict:
-    """Convert any storage SDK object into JSON-safe dict."""
+def _serialize(obj: object) -> dict[str, Any]:
+    """Convert any storage SDK object into a JSON-safe dict."""
     if isinstance(obj, dict):
-        return obj
+        return cast("dict[str, Any]", obj)
     if hasattr(obj, "model_dump"):
-        return obj.model_dump()
+        return cast("dict[str, Any]", obj.model_dump())
     if hasattr(obj, "to_dict"):
-        return obj.to_dict()
-    return {k: getattr(obj, k) for k in dir(obj) if not k.startswith("_")}
+        return cast("dict[str, Any]", obj.to_dict())
+    return {key: getattr(obj, key) for key in dir(obj) if not key.startswith("_")}
 
 
-# -----------------------------
-# Upload
-# -----------------------------
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_file(
     _session_id: Annotated[str, Depends(require_oauth_session)],
@@ -90,7 +84,7 @@ async def upload_file(
     container: str,
     remote_path: str,
     file: UploadFile,
-) -> dict:
+) -> dict[str, Any]:
     """Upload file to storage."""
     endpoint = "/storage/files/upload"
     method = "POST"
@@ -114,9 +108,6 @@ async def upload_file(
     return _serialize(result)
 
 
-# -----------------------------
-# Download
-# -----------------------------
 @router.get("/download")
 def download_file(
     _session_id: Annotated[str, Depends(require_oauth_session)],
@@ -159,16 +150,13 @@ def download_file(
     return Response(content=content, media_type="application/octet-stream")
 
 
-# -----------------------------
-# List
-# -----------------------------
 @router.get("/list")
 def list_files(
     _session_id: Annotated[str, Depends(require_oauth_session)],
     request: Request,
     container: str,
     prefix: str = "",
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List files in storage container."""
     endpoint = "/storage/files/list"
     method = "GET"
@@ -188,19 +176,16 @@ def list_files(
     SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
     REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start_time)
 
-    return [_serialize(r) for r in result]
+    return [_serialize(item) for item in result]
 
 
-# -----------------------------
-# Delete
-# -----------------------------
 @router.delete("/delete")
 def delete_file(
     _session_id: Annotated[str, Depends(require_oauth_session)],
     request: Request,
     container: str,
     object_name: str,
-) -> dict:
+) -> dict[str, Any]:
     """Delete file from storage."""
     endpoint = "/storage/files/delete"
     method = "DELETE"
@@ -223,16 +208,13 @@ def delete_file(
     return _serialize(result)
 
 
-# -----------------------------
-# Info
-# -----------------------------
 @router.get("/info")
 def get_file_info(
     _session_id: Annotated[str, Depends(require_oauth_session)],
     request: Request,
     container: str,
     object_name: str,
-) -> dict:
+) -> dict[str, Any]:
     """Get file metadata."""
     endpoint = "/storage/files/info"
     method = "GET"
