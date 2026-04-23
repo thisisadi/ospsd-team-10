@@ -67,6 +67,20 @@ def _get_storage_client(request: Request) -> CloudStorageClient:
 
 
 # -----------------------------
+# SAFE SERIALIZER (FIXED ANN401)
+# -----------------------------
+def _serialize(obj: object) -> dict:
+    """Convert any storage SDK object into JSON-safe dict."""
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if hasattr(obj, "to_dict"):
+        return obj.to_dict()
+    return {k: getattr(obj, k) for k in dir(obj) if not k.startswith("_")}
+
+
+# -----------------------------
 # Upload
 # -----------------------------
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
@@ -77,6 +91,7 @@ async def upload_file(
     remote_path: str,
     file: UploadFile,
 ) -> dict:
+    """Upload file to storage."""
     endpoint = "/storage/files/upload"
     method = "POST"
 
@@ -96,7 +111,7 @@ async def upload_file(
     SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
     REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start_time)
 
-    return result.to_dict() if hasattr(result, "to_dict") else dict(result)
+    return _serialize(result)
 
 
 # -----------------------------
@@ -109,6 +124,7 @@ def download_file(
     container: str,
     object_name: str,
 ) -> Response:
+    """Download file from storage."""
     endpoint = "/storage/files/download"
     method = "GET"
 
@@ -153,6 +169,7 @@ def list_files(
     container: str,
     prefix: str = "",
 ) -> list[dict]:
+    """List files in storage container."""
     endpoint = "/storage/files/list"
     method = "GET"
 
@@ -171,7 +188,7 @@ def list_files(
     SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
     REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start_time)
 
-    return [r.to_dict() if hasattr(r, "to_dict") else dict(r) for r in result]
+    return [_serialize(r) for r in result]
 
 
 # -----------------------------
@@ -184,6 +201,7 @@ def delete_file(
     container: str,
     object_name: str,
 ) -> dict:
+    """Delete file from storage."""
     endpoint = "/storage/files/delete"
     method = "DELETE"
 
@@ -202,7 +220,7 @@ def delete_file(
     SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
     REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start_time)
 
-    return result.to_dict() if hasattr(result, "to_dict") else dict(result)
+    return _serialize(result)
 
 
 # -----------------------------
@@ -215,6 +233,7 @@ def get_file_info(
     container: str,
     object_name: str,
 ) -> dict:
+    """Get file metadata."""
     endpoint = "/storage/files/info"
     method = "GET"
 
@@ -233,4 +252,4 @@ def get_file_info(
     SUCCESS_COUNT.labels(endpoint=endpoint, method=method).inc()
     REQUEST_LATENCY.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start_time)
 
-    return result.to_dict() if hasattr(result, "to_dict") else dict(result)
+    return _serialize(result)
