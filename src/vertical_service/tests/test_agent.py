@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
-import vertical_service.routes.agent as agent_routes
 from cloud_storage_api.exceptions import StorageBackendError
 from fastapi.testclient import TestClient
-from openai_ai_client_impl.client import OpenAIAIClient
 from vertical_service.agent import (
     _make_tool_handler,
     _object_info_payload,
@@ -44,7 +42,7 @@ class _FakeCompletions:
         self.calls: list[dict[str, Any]] = []
 
     def create(self, **kwargs: object) -> _FakeCompletion:
-        self.calls.append(kwargs)
+        self.calls.append(cast("dict[str, Any]", kwargs))
         msg = _FakeMessage(content="default") if not self._replies else self._replies.pop(0)
         return _FakeCompletion(msg)
 
@@ -59,16 +57,38 @@ class _FakeOpenAI:
         self.chat = _FakeChat(replies)
 
 
+class DummyAIClient:
+    """Local stand-in for the real OpenAI client used by agent tests."""
+
+    def __init__(self, replies: list[_FakeMessage] | None = None) -> None:
+        """Initialize the dummy AI client."""
+        self._client = _FakeOpenAI(replies or [_FakeMessage(content="**Summary:** hello")])
+
+    def send_message(self, prompt: str) -> str:
+        """Return a deterministic summary string for tests."""
+        _ = prompt
+        return "**Summary:** hello"
+
+    def run_chat_with_tools(
+        self,
+        *,
+        user_message: str,
+        system_prompt: str,
+        tools: list[dict[str, Any]],
+        tool_handler: object,
+    ) -> str:
+        """Return a deterministic tool-loop response for tests."""
+        _ = (user_message, system_prompt, tools, tool_handler)
+        return "from-tools"
+
+
 @pytest.fixture
-def fake_openai_client() -> OpenAIAIClient:
-    """OpenAI client backed by a stub transport (no network)."""
-    return OpenAIAIClient(
-        api_key="test-key",
-        client=_FakeOpenAI([_FakeMessage(content="**Summary:** hello")]),  # type: ignore[arg-type]
-    )
+def fake_openai_client() -> DummyAIClient:
+    """AI client backed by a stub transport with no external dependency."""
+    return DummyAIClient([_FakeMessage(content="**Summary:** hello")])
 
 
-def test_summarize_and_send_truncates_and_invokes_send(fake_openai_client: OpenAIAIClient) -> None:
+def test_summarize_and_send_truncates_and_invokes_send(fake_openai_client: DummyAIClient) -> None:
     delivered: list[str] = []
     storage = MagicMock()
 
@@ -79,7 +99,7 @@ def test_summarize_and_send_truncates_and_invokes_send(fake_openai_client: OpenA
     storage.download_file.side_effect = _download
 
     out = summarize_and_send(
-        ai_client=fake_openai_client,
+        ai_client=cast("Any", fake_openai_client),
         storage=storage,
         container="bucket",
         object_key="notes.txt",
@@ -94,9 +114,8 @@ def test_summarize_and_send_truncates_and_invokes_send(fake_openai_client: OpenA
 
 def test_agent_summarize_shortcut_returns_summary(
     monkeypatch: pytest.MonkeyPatch,
-    fake_openai_client: OpenAIAIClient,
+    fake_openai_client: DummyAIClient,
 ) -> None:
-    monkeypatch.setenv("AGENT_API_KEY", "secret")
     monkeypatch.setenv("AWS_S3_BUCKET", "unit-bucket")
     app = create_app()
     app.state.ai_client = fake_openai_client
@@ -110,11 +129,7 @@ def test_agent_summarize_shortcut_returns_summary(
     app.state.storage_client = storage
 
     client = TestClient(app)
-    res = client.post(
-        "/agent",
-        json={"message": "/summarize report.md"},
-        headers={"X-API-Key": "secret"},
-    )
+    res = client.post("/agent", json={"message": "/summarize report.md"})
     assert res.status_code == 200
     body = res.json()
     assert body["reply"] == "**Summary:** hello"
@@ -183,7 +198,7 @@ def test_make_tool_handler_file_info_and_storage_error() -> None:
     assert "backend down" in err_out
 
 
-def test_make_tool_handler_summarize_tool(fake_openai_client: OpenAIAIClient) -> None:
+def test_make_tool_handler_summarize_tool(fake_openai_client: DummyAIClient) -> None:
     storage = MagicMock()
 
     def _dl(*, container: str, object_name: str, file_name: str) -> object:  # noqa: ARG001
@@ -191,7 +206,11 @@ def test_make_tool_handler_summarize_tool(fake_openai_client: OpenAIAIClient) ->
         return object()
 
     storage.download_file.side_effect = _dl
-    handler = _make_tool_handler(storage=storage, container="c", ai_client=fake_openai_client)
+    handler = _make_tool_handler(
+        storage=storage,
+        container="c",
+        ai_client=cast("Any", fake_openai_client),
+    )
     raw = handler("summarize_storage_file", {"object_key": "f.txt"})
     assert "summary" in raw.lower() or "Summary" in raw
 
@@ -207,56 +226,20 @@ def test_run_agent_turn_delegates_to_tool_loop(monkeypatch: pytest.MonkeyPatch) 
     ai.run_chat_with_tools.assert_called_once()
 
 
-def test_agent_requires_api_key_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_API_KEY", "secret")
+def test_agent_requires_service_key_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_SERVICE_KEY", "secret")
     monkeypatch.setenv("AWS_S3_BUCKET", "b")
     app = create_app()
-    app.state.ai_client = OpenAIAIClient(
-        api_key="k",
-        client=_FakeOpenAI([_FakeMessage(content="x")]),  # type: ignore[arg-type]
-    )
+    app.state.ai_client = DummyAIClient([_FakeMessage(content="x")])
     app.state.storage_client = MagicMock()
     client = TestClient(app)
+
     res = client.post("/agent", json={"message": "/summarize a.txt"})
     assert res.status_code == 401
 
     res_ok = client.post(
         "/agent",
         json={"message": "/summarize a.txt"},
-        headers={"X-API-Key": "secret"},
+        headers={"X-Service-Key": "secret"},
     )
     assert res_ok.status_code == 200
-
-
-def test_agent_sends_reply_to_chat_when_channel_present(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_API_KEY", "secret")
-    monkeypatch.setenv("AWS_S3_BUCKET", "b")
-    app = create_app()
-    app.state.ai_client = OpenAIAIClient(
-        api_key="k",
-        client=_FakeOpenAI([_FakeMessage(content="from-ai")]),  # type: ignore[arg-type]
-    )
-    app.state.storage_client = MagicMock()
-
-    sent: list[tuple[str, str]] = []
-
-    def _fake_send(channel: str, text: str) -> str:
-        sent.append((channel, text))
-        return "msg-123"
-
-    monkeypatch.setattr(
-        agent_routes,
-        "send_agent_response",
-        _fake_send,
-    )
-
-    client = TestClient(app)
-    res = client.post(
-        "/agent",
-        json={"message": "hello", "channel_id": "C123"},
-        headers={"X-API-Key": "secret"},
-    )
-
-    assert res.status_code == 200
-    assert sent == [("C123", "from-ai")]
-    assert res.json()["sent_message_id"] == "msg-123"

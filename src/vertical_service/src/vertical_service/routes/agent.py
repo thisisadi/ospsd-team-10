@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+import os
+from typing import Annotated, Any, Protocol, cast
 
 from cloud_storage_api import CloudStorageClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from chat_client_api import ChatServiceError, send_agent_response
-from openai_ai_client_impl import OpenAIAIClient
-from vertical_service.agent import default_storage_container, run_agent_turn
-from vertical_service.deps import verify_api_key
+from vertical_service.agent import AIClient, default_storage_container, run_agent_turn
 
 router = APIRouter()
 
@@ -21,7 +19,7 @@ class AgentRequest(BaseModel):
 
     message: str = Field(..., min_length=1, description="End-user or bot-composed instruction text.")
     channel_id: str | None = Field(default=None, description="Chat channel; echoed back for downstream send_message.")
-    container: str | None = Field(default=None, description="Optional storage container (S3 bucket) override.")
+    container: str | None = Field(default=None, description="Optional storage container override.")
     context: dict[str, Any] | None = Field(default=None, description="Extra structured context from the chat platform.")
 
 
@@ -30,22 +28,52 @@ class AgentResponse(BaseModel):
 
     reply: str
     channel_id: str | None = None
-    sent_message_id: str | None = None
 
 
-def _get_openai_client(request: Request) -> OpenAIAIClient:
+class SupportsAgentAI(Protocol):
+    """Minimal protocol for AI clients used by the agent flow."""
+
+    def send_message(self, prompt: str) -> str:
+        """Return a text response for a plain prompt."""
+
+    def run_chat_with_tools(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        tools: list[dict[str, Any]],
+        tool_handler: object,
+    ) -> str:
+        """Run a tool-enabled chat turn and return the final response."""
+
+
+def _require_service_key(request: Request) -> None:
+    expected = os.environ.get("AGENT_SERVICE_KEY")
+    if not expected:
+        return
+    presented = request.headers.get("X-Service-Key")
+    if presented != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Service-Key.",
+        )
+
+
+def _get_openai_client(request: Request) -> SupportsAgentAI:
     raw = getattr(request.app.state, "ai_client", None)
     if raw is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI client is not configured (set OPENAI_API_KEY).",
+            detail="AI client is not configured.",
         )
-    if not isinstance(raw, OpenAIAIClient):
+
+    if not hasattr(raw, "send_message") or not hasattr(raw, "run_chat_with_tools"):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Configured AI client does not support agent tools.",
         )
-    return raw
+
+    return cast("SupportsAgentAI", raw)
 
 
 def _get_storage(request: Request) -> CloudStorageClient:
@@ -55,12 +83,13 @@ def _get_storage(request: Request) -> CloudStorageClient:
 
 @router.post("/agent", response_model=AgentResponse)
 def agent_endpoint(
+    request: Request,
     body: AgentRequest,
-    _verified: Annotated[str, Depends(verify_api_key)],
     storage: Annotated[CloudStorageClient, Depends(_get_storage)],
-    ai: Annotated[OpenAIAIClient, Depends(_get_openai_client)],
+    ai: Annotated[SupportsAgentAI, Depends(_get_openai_client)],
 ) -> AgentResponse:
-    """Run prompt/action routing and tool-assisted completion; return text for the chat layer."""
+    """Run prompt routing and tool-assisted completion; return text for the chat layer."""
+    _require_service_key(request)
     try:
         container = default_storage_container(body.container)
     except RuntimeError as exc:
@@ -73,22 +102,8 @@ def agent_endpoint(
     reply = run_agent_turn(
         message=body.message,
         storage=storage,
-        ai=ai,
+        ai=cast("AIClient", ai),
         container=container,
         request_context=ctx,
     )
-    sent_message_id: str | None = None
-    if body.channel_id:
-        try:
-            sent_message_id = send_agent_response(body.channel_id, reply)
-        except ChatServiceError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=str(exc),
-            ) from exc
-
-    return AgentResponse(
-        reply=reply,
-        channel_id=body.channel_id,
-        sent_message_id=sent_message_id,
-    )
+    return AgentResponse(reply=reply, channel_id=body.channel_id)
