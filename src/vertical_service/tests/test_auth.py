@@ -6,14 +6,20 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-
-from vertical_impl import token_store as token_store_mod
 from vertical_impl.token_store import TokenData
 from vertical_service.app import create_app
 from vertical_service.deps import require_oauth_session
 
+from vertical_impl import token_store as token_store_mod
+
 pytestmark = pytest.mark.unit
+
+
+class _DummyRequest:
+    def __init__(self, session: dict) -> None:
+        self.session = session
 
 
 @pytest.fixture
@@ -112,10 +118,12 @@ def test_auth_callback_success(
 
 def test_auth_and_deps_full_execution(client: TestClient) -> None:
     """Exercise auth error path and dependency execution for coverage."""
-    response = client.get("/auth/callback", params={"error": "access_denied"}, follow_redirects=False)
+    response = client.get(
+        "/auth/callback",
+        params={"error": "access_denied"},
+        follow_redirects=False,
+    )
     assert response.status_code == 400
 
-    try:
-        require_oauth_session()
-    except Exception:
-        pass
+    with pytest.raises(HTTPException):
+        require_oauth_session(_DummyRequest({}))

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
-
 from vertical_impl.token_store import TokenData, store_token
 from vertical_service.deps import require_oauth_session
 from vertical_service.sessions import OAUTH_SESSION_ID_KEY
