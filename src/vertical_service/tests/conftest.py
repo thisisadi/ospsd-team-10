@@ -21,4 +21,7 @@ def oauth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OAUTH_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OAUTH_AUTH_URL", "https://idp.example/oauth/authorize")
     monkeypatch.setenv("OAUTH_TOKEN_URL", "https://idp.example/oauth/token")
-    monkeypatch.setenv("OAUTH_REDIRECT_URI", "http://127.0.0.1:8000/auth/callback")
+    monkeypatch.setenv(
+        "OAUTH_REDIRECT_URI",
+        "http://127.0.0.1:8000/auth/callback",
+    )

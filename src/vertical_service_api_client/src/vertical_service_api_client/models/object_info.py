@@ -196,8 +196,7 @@ class ObjectInfo:
                 if not isinstance(data, str):
                     raise TypeError()
                 updated_at_type_0 = isoparse(data)
-
-                return updated_at_type_0
+                return cast(datetime.datetime | None | Unset, updated_at_type_0)
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
             return cast(datetime.datetime | None | Unset, data)
@@ -213,7 +212,6 @@ class ObjectInfo:
                 if not isinstance(data, dict):
                     raise TypeError()
                 metadata_type_0 = ObjectInfoMetadataType0.from_dict(data)
-
                 return metadata_type_0
             except (TypeError, ValueError, AttributeError, KeyError):
                 pass
