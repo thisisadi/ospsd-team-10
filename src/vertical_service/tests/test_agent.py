@@ -81,6 +81,7 @@ class DummyAIClient:
         _ = (user_message, system_prompt, tools, tool_handler)
         return "from-tools"
 
+
 @pytest.fixture
 def fake_openai_client() -> DummyAIClient:
     """AI client backed by a stub transport with no external dependency."""
