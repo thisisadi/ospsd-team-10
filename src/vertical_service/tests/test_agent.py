@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+import vertical_service.routes.agent as agent_routes
 from cloud_storage_api.exceptions import StorageBackendError
 from fastapi.testclient import TestClient
 from openai_ai_client_impl.client import OpenAIAIClient
@@ -95,6 +96,7 @@ def test_agent_summarize_shortcut_returns_summary(
     monkeypatch: pytest.MonkeyPatch,
     fake_openai_client: OpenAIAIClient,
 ) -> None:
+    monkeypatch.setenv("AGENT_API_KEY", "secret")
     monkeypatch.setenv("AWS_S3_BUCKET", "unit-bucket")
     app = create_app()
     app.state.ai_client = fake_openai_client
@@ -108,7 +110,11 @@ def test_agent_summarize_shortcut_returns_summary(
     app.state.storage_client = storage
 
     client = TestClient(app)
-    res = client.post("/agent", json={"message": "/summarize report.md"})
+    res = client.post(
+        "/agent",
+        json={"message": "/summarize report.md"},
+        headers={"X-API-Key": "secret"},
+    )
     assert res.status_code == 200
     body = res.json()
     assert body["reply"] == "**Summary:** hello"
@@ -201,8 +207,8 @@ def test_run_agent_turn_delegates_to_tool_loop(monkeypatch: pytest.MonkeyPatch) 
     ai.run_chat_with_tools.assert_called_once()
 
 
-def test_agent_requires_service_key_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_SERVICE_KEY", "secret")
+def test_agent_requires_api_key_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_API_KEY", "secret")
     monkeypatch.setenv("AWS_S3_BUCKET", "b")
     app = create_app()
     app.state.ai_client = OpenAIAIClient(
@@ -217,6 +223,40 @@ def test_agent_requires_service_key_when_configured(monkeypatch: pytest.MonkeyPa
     res_ok = client.post(
         "/agent",
         json={"message": "/summarize a.txt"},
-        headers={"X-Service-Key": "secret"},
+        headers={"X-API-Key": "secret"},
     )
     assert res_ok.status_code == 200
+
+
+def test_agent_sends_reply_to_chat_when_channel_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_API_KEY", "secret")
+    monkeypatch.setenv("AWS_S3_BUCKET", "b")
+    app = create_app()
+    app.state.ai_client = OpenAIAIClient(
+        api_key="k",
+        client=_FakeOpenAI([_FakeMessage(content="from-ai")]),  # type: ignore[arg-type]
+    )
+    app.state.storage_client = MagicMock()
+
+    sent: list[tuple[str, str]] = []
+
+    def _fake_send(channel: str, text: str) -> str:
+        sent.append((channel, text))
+        return "msg-123"
+
+    monkeypatch.setattr(
+        agent_routes,
+        "send_agent_response",
+        _fake_send,
+    )
+
+    client = TestClient(app)
+    res = client.post(
+        "/agent",
+        json={"message": "hello", "channel_id": "C123"},
+        headers={"X-API-Key": "secret"},
+    )
+
+    assert res.status_code == 200
+    assert sent == [("C123", "from-ai")]
+    assert res.json()["sent_message_id"] == "msg-123"
