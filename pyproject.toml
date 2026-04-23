@@ -78,6 +78,7 @@ mypy_path = [
   "src/vertical_adapter/src",
   "src/vertical_service/src",
   "src/vertical_impl/src",
+  "src/chat_client_service_api_client/src",
   "src/chat_client_api/src",
   "src/http_chat_client_impl/src",
 ]
@@ -85,7 +86,6 @@ ignore_missing_imports = false
 warn_unused_ignores = false
 exclude = [
   "src/vertical_api",
-  "src/chat_client_service_api_client/src",
 ]
 
 [tool.pytest.ini_options]
