@@ -7,6 +7,8 @@ jobs:
     working_directory: ~/project
     steps:
       - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
 
       - run:
           name: Install uv and add to PATH
@@ -33,6 +35,43 @@ jobs:
             uv run mypy --version
             uv run pytest --version
             uv run coverage --version
+
+      - run:
+          name: Install AWS CLI
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+
+      - run:
+          name: Login to ECR
+          command: |
+            aws ecr get-login-password --region $AWS_REGION \
+            | docker login \
+              --username AWS \
+              --password-stdin 396608794887.dkr.ecr.us-east-1.amazonaws.com
+
+      - run:
+          name: Build image
+          command: docker build -t ospsd-cloud-service .
+
+      - run:
+          name: Tag image
+          command: |
+            docker tag ospsd-cloud-service:latest \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:latest
+
+            docker tag ospsd-cloud-service:latest \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:$CIRCLE_SHA1
+
+      - run:
+          name: Push image
+          command: |
+            docker push \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:latest
+
+            docker push \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:$CIRCLE_SHA1
 
       - persist_to_workspace:
           root: .
