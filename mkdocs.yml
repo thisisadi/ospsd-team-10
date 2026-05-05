@@ -1,5 +1,9 @@
 site_name: Cloud Storage Client Project (AWS S3)
 site_description: "A component-based Python cloud storage client with an AWS S3 implementation."
+# Project site URL for GitHub Pages (update repo_name if the fork/org changes)
+site_url: https://thisisadi.github.io/ospsd-team-10/
+repo_url: https://github.com/thisisadi/ospsd-team-10
+repo_name: thisisadi/ospsd-team-10
 
 theme:
   name: material
@@ -17,25 +21,32 @@ theme:
     - content.code.copy
 
 nav:
-  - "Overview": "index.md"
-  - "Architecture": "component.md"
-  - "Getting Started": "contributing.md"
-  - "Design": "design.md"
-  - "API Reference":
-      - "Cloud Storage Client API": "api/cloud_storage_client_api.md"
-      - "AWS S3 Client Implementation": "api/s3_client_impl.md"
+  - Overview: index.md
+  - Architecture: component.md
+  - Getting Started: contributing.md
+  - Design: DESIGN.md
+  - API Reference:
+      - Cloud Storage Client API: api/vertical_api.md
+      - AWS S3 Client Implementation: api/vertical_impl.md
 
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path:
+        - .
+        - docs
 
 plugins:
   - mkdocstrings:
       default_handler: python
       handlers:
         python:
+          paths:
+            - src/vertical_api/src
+            - src/vertical_impl/src
           options:
             show_source: false
-            docstring_style: google   # <-- use google, numpy, or restructuredtext
+            docstring_style: google
             members_order: source
