@@ -12,6 +12,7 @@ from cloud_storage_api.models import ObjectInfo
 from vertical_impl.client import S3CloudStorageClient
 from vertical_service.provider_switching.demo_workflow import run_storage_workflow
 from vertical_service.provider_switching.factory import create_storage_client
+from vertical_service.provider_switching.gcp_storage_client import GCPCloudStorageClient
 from vertical_service.provider_switching.mock_storage_client import MockCloudStorageClient
 
 
@@ -36,6 +37,17 @@ def test_factory_returns_s3_for_s3_provider(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("STORAGE_PROVIDER", "s3")
     client = create_storage_client()
     assert isinstance(client, S3CloudStorageClient)
+    assert isinstance(client, CloudStorageClient)
+
+
+@pytest.mark.integration
+def test_factory_returns_gcp_for_gcp_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STORAGE_PROVIDER", "gcp")
+    monkeypatch.setenv("GCP_PROJECT_ID", "demo-project")
+    monkeypatch.delenv("GCP_CREDENTIALS_PATH", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    client = create_storage_client()
+    assert isinstance(client, GCPCloudStorageClient)
     assert isinstance(client, CloudStorageClient)
 
 
@@ -97,3 +109,29 @@ def test_shared_workflow_s3_provider_requires_credentials(monkeypatch: pytest.Mo
     # This verifies factory wiring for S3 without forcing AWS calls in CI.
     client = create_storage_client()
     assert isinstance(client, S3CloudStorageClient)
+
+
+@pytest.mark.integration
+def test_shared_workflow_gcp_provider_requires_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STORAGE_PROVIDER", "gcp")
+    project_id = os.getenv("GCP_PROJECT_ID")
+    credentials_path = os.getenv("GCP_CREDENTIALS_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    bucket = os.getenv("GCP_BUCKET_NAME") or os.getenv("GCP_BUCKET")
+    if not project_id or not credentials_path or not bucket:
+        pytest.skip(
+            "GCP_PROJECT_ID, (GCP_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS), "
+            "and (GCP_BUCKET_NAME or GCP_BUCKET) are required"
+        )
+
+    client = create_storage_client()
+    assert isinstance(client, GCPCloudStorageClient)
+
+    object_name = f"demo/{uuid.uuid4()}.txt"
+    payload = b"provider switching gcp demo payload"
+    result = run_storage_workflow(
+        client=client,
+        container=bucket,
+        object_name=object_name,
+        data=payload,
+    )
+    assert result["downloaded_data"] == payload
