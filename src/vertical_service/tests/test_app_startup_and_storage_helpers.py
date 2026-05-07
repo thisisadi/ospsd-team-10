@@ -53,6 +53,7 @@ def test_setup_startup_sets_clients(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_metrics_middleware_failure_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SESSION_SECRET_KEY", "test-session-secret-key-at-least-32-bytes-long")
     monkeypatch.setenv("OPENAI_API_KEY", "unit-key")
+
     def _fake_create_storage_client() -> object:
         return object()
 
@@ -102,6 +103,7 @@ def test_serialize_variants() -> None:
 def test_storage_delete_and_info_exception_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SESSION_SECRET_KEY", "test-session-secret-key-at-least-32-bytes-long")
     monkeypatch.setenv("OPENAI_API_KEY", "unit-key")
+
     class _FailingStorage:
         def delete_file(self, container: str, object_name: str) -> dict[str, bool]:
             _ = (container, object_name)
