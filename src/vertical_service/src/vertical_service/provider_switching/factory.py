@@ -7,13 +7,14 @@ from typing import TYPE_CHECKING
 
 from vertical_impl.client import S3CloudStorageClient
 
+from vertical_service.provider_switching.gcp_storage_client import GCPCloudStorageClient
 from vertical_service.provider_switching.mock_storage_client import MockCloudStorageClient
 
 if TYPE_CHECKING:
     from cloud_storage_api import CloudStorageClient
 
 _DEFAULT_PROVIDER = "s3"
-_VALID_PROVIDERS = {"s3", "mock"}
+_VALID_PROVIDERS = {"s3", "gcp", "mock"}
 
 
 def create_storage_client() -> CloudStorageClient:
@@ -22,6 +23,8 @@ def create_storage_client() -> CloudStorageClient:
 
     if provider == "s3":
         return S3CloudStorageClient()
+    if provider == "gcp":
+        return GCPCloudStorageClient()
     if provider == "mock":
         return MockCloudStorageClient()
 
