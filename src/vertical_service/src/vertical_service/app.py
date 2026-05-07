@@ -15,9 +15,9 @@ from prometheus_client import (
     generate_latest,
 )
 from starlette.middleware.sessions import SessionMiddleware
-from vertical_impl.client import S3CloudStorageClient
 
 from vertical_service.config import session_secret_key
+from vertical_service.provider_switching.factory import create_storage_client
 from vertical_service.routes import agent, auth, health, storage
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ def setup_startup(app: FastAPI) -> None:
     def startup() -> None:
         logger.info("Initializing application state")
 
-        app.state.storage_client = S3CloudStorageClient()
+        app.state.storage_client = create_storage_client()
 
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
