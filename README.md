@@ -30,6 +30,16 @@ Supports both **local (direct S3)** and **remote (service via HTTP)** usage.
 
 Includes strict static analysis (ruff, mypy) and comprehensive testing (unit, integration, E2E).
 
+## HW3 Provider Switching Demo
+
+The storage provider is selected by configuration through `STORAGE_PROVIDER`:
+
+- `STORAGE_PROVIDER=s3` uses the existing `S3CloudStorageClient` implementation.
+- `STORAGE_PROVIDER=mock` uses an in-memory mock implementation for local demo/testing.
+- If `STORAGE_PROVIDER` is unset, the service defaults to `s3` to preserve existing teammate workflows.
+
+Application and demo workflow code depend only on the shared `CloudStorageClient` interface (`cloud-storage-api` v1.0.0), not provider-specific logic. The same upload/list/info/download/delete workflow can run against either S3 or mock, demonstrating provider swapping for the HW3 video requirement.
+
 ## Documentation
 
 - **[docs/DESIGN.md](docs/DESIGN.md)** — design document (architecture, API decisions, HW2 extension)

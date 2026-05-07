@@ -256,7 +256,7 @@ wheels = [
 [[package]]
 name = "cloud-storage-api"
 version = "1.0.0"
-source = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage.git?rev=v1.0.0#ed89a05318f42037c3501c8483ed26cb054b6787" }
+source = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage?rev=v1.0.0#ed89a05318f42037c3501c8483ed26cb054b6787" }
 
 [[package]]
 name = "colorama"
@@ -968,7 +968,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cloud-storage-api", git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage.git?rev=v1.0.0" },
+    { name = "cloud-storage-api", git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage?rev=v1.0.0" },
     { name = "prometheus-client" },
 ]
 

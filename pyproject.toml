@@ -30,7 +30,7 @@ vertical-impl = { workspace = true }
 chat-client-service-api-client = { workspace = true }
 chat-client-api = { workspace = true }
 http-chat-client-impl = { workspace = true }
-cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage.git", rev = "v1.0.0" }
+cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage", rev = "v1.0.0" }
 
 [tool.ruff]
 line-length = 130
