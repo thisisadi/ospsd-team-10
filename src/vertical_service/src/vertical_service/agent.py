@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-from io import BytesIO
 from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Literal, Protocol, cast
@@ -199,7 +199,7 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
     ]
 
 
-def _make_tool_handler(
+def _make_tool_handler(  # noqa: C901, PLR0915
     *,
     storage: CloudStorageClient,
     container: str,
