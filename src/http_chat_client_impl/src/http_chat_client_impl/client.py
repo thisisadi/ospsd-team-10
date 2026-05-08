@@ -4,16 +4,23 @@ from __future__ import annotations
 
 import os
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import httpx
-from chat_client_service_api_client.api.default import health_health_get, send_message_messages_post
+from chat_client_service_api_client.api.default import (
+    get_messages_messages_get,
+    health_health_get,
+    send_message_messages_post,
+)
 from chat_client_service_api_client.client import Client as OpenApiClient
+from chat_client_service_api_client.models.get_messages_response import GetMessagesResponse
 from chat_client_service_api_client.models.http_validation_error import HTTPValidationError
 from chat_client_service_api_client.models.send_message_request import SendMessageRequest
 from chat_client_service_api_client.models.send_message_response_model import SendMessageResponseModel
 
 from chat_client_api import (
     ChatClient,
+    ChatMessage,
     ChatServiceAuthError,
     ChatServiceError,
     register_client,
@@ -29,6 +36,9 @@ from http_chat_client_impl._config import (
     MSG_UNEXPECTED_SEND,
     MSG_VALIDATION,
 )
+
+if TYPE_CHECKING:
+    from chat_client_service_api_client.models.message_model import MessageModel
 
 
 def _read_required_env() -> tuple[str, str]:
@@ -121,6 +131,43 @@ class HttpChatClient(ChatClient):
             return False
         return int(detailed.status_code) == HTTPStatus.OK and detailed.parsed is not None
 
+    def get_messages(self, channel: str, *, limit: int = 10, cursor: str | None = None) -> list[ChatMessage]:
+        """Fetch recent channel messages from the Team 9 service."""
+        base_url, session_id = _read_required_env()
+        client = self._ensure_api(base_url)
+
+        try:
+            detailed = get_messages_messages_get.sync_detailed(  # type: ignore[attr-defined]
+                client=client,
+                channel=channel,
+                limit=limit,
+                cursor=cursor,
+                x_session_id=session_id,
+            )
+        except httpx.RequestError as exc:
+            network_detail = f"{MSG_NETWORK} ({type(exc).__name__})."
+            raise ChatServiceError(network_detail) from exc
+
+        if _is_auth_rejection(int(detailed.status_code)):
+            raise ChatServiceAuthError(MSG_AUTH_SESSION)
+
+        if int(detailed.status_code) == HTTPStatus.UNPROCESSABLE_ENTITY:
+            raise ChatServiceError(
+                _validation_error_message(parsed=detailed.parsed),
+                status_code=int(HTTPStatus.UNPROCESSABLE_ENTITY),
+            )
+
+        if detailed.status_code != HTTPStatus.OK or detailed.parsed is None:
+            body_preview = _safe_preview_bytes(detailed.content)
+            msg = f"Unexpected Team 9 get_messages response (status={int(detailed.status_code)}; body={body_preview!s})."
+            raise ChatServiceError(msg, status_code=int(detailed.status_code))
+
+        if not isinstance(detailed.parsed, GetMessagesResponse):
+            msg = "Team 9 get_messages response payload was not understood."
+            raise ChatServiceError(msg)
+
+        return [_to_chat_message(item) for item in detailed.parsed.messages]
+
 
 def _safe_preview_bytes(data: bytes, limit: int = 512) -> str:
     """Return safe preview string from bytes."""
@@ -128,6 +175,17 @@ def _safe_preview_bytes(data: bytes, limit: int = 512) -> str:
     if len(text) > limit:
         return f"{text[:limit]}…"
     return text
+
+
+def _to_chat_message(model: MessageModel) -> ChatMessage:
+    """Convert generated OpenAPI message DTO into the port-level ChatMessage."""
+    return ChatMessage(
+        message_id=model.message_id,
+        channel=model.channel,
+        text=model.text,
+        sender=model.sender,
+        timestamp=model.timestamp,
+    )
 
 
 def _register_default() -> None:

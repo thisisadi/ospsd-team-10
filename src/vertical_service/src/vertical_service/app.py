@@ -16,6 +16,7 @@ from prometheus_client import (
 )
 from starlette.middleware.sessions import SessionMiddleware
 
+import http_chat_client_impl  # noqa: F401
 from vertical_service.config import session_secret_key
 from vertical_service.provider_switching.factory import create_storage_client
 from vertical_service.routes import agent, auth, health, storage
