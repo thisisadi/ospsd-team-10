@@ -9,12 +9,12 @@ from cloud_storage_api import CloudStorageClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from vertical_service.agent import AIClient, default_storage_container, run_agent_turn
 from vertical_service.agent_api import (
     ENV_AGENT_API_KEY,
     HTTP_HEADER_X_API_KEY,
     MSG_INVALID_OR_MISSING_KEY,
 )
-from vertical_service.agent import AIClient, default_storage_container, run_agent_turn
 
 router = APIRouter()
 
