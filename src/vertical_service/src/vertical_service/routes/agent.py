@@ -9,6 +9,11 @@ from cloud_storage_api import CloudStorageClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from vertical_service.agent_api import (
+    ENV_AGENT_API_KEY,
+    HTTP_HEADER_X_API_KEY,
+    MSG_INVALID_OR_MISSING_KEY,
+)
 from vertical_service.agent import AIClient, default_storage_container, run_agent_turn
 
 router = APIRouter()
@@ -42,20 +47,20 @@ class SupportsAgentAI(Protocol):
         system_prompt: str,
         user_message: str,
         tools: list[dict[str, Any]],
-        tool_handler: object,
+        handle_tool: object,
     ) -> str:
         """Run a tool-enabled chat turn and return the final response."""
 
 
 def _require_service_key(request: Request) -> None:
-    expected = os.environ.get("AGENT_SERVICE_KEY")
+    expected = os.environ.get(ENV_AGENT_API_KEY)
     if not expected:
         return
-    presented = request.headers.get("X-Service-Key")
+    presented = request.headers.get(HTTP_HEADER_X_API_KEY)
     if presented != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-Service-Key.",
+            detail=MSG_INVALID_OR_MISSING_KEY,
         )
 
 
