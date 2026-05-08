@@ -26,7 +26,7 @@ class AIClient(Protocol):
         system_prompt: str,
         user_message: str,
         tools: list[dict[str, Any]],
-        tool_handler: Callable[[str, dict[str, Any]], str],
+        handle_tool: Callable[[str, dict[str, Any]], str],
     ) -> str:
         """Run a tool-enabled chat turn and return the final response."""
 
@@ -68,13 +68,16 @@ def summarize_and_send(  # noqa: PLR0913
 
     try:
         storage.download_file(container=container, object_name=object_key, file_name=str(tmp_path))
-        raw = tmp_path.read_bytes()
+        # Bound memory use for unexpectedly large objects by reading only a capped prefix.
+        max_bytes = max(max_content_chars + 1, 1)
+        with tmp_path.open("rb") as handle:
+            raw = handle.read(max_bytes)
     finally:
         if tmp_path.exists():
             tmp_path.unlink()
 
     text = raw.decode("utf-8", errors="replace")
-    if len(text) > max_content_chars:
+    if len(raw) > max_content_chars or len(text) > max_content_chars:
         text = text[:max_content_chars] + "\n...[truncated for model context]"
 
     prompt = (
@@ -250,6 +253,6 @@ def run_agent_turn(
         system_prompt=system,
         user_message=message,
         tools=storage_tool_definitions(),
-        tool_handler=_make_tool_handler(storage=storage, container=container, ai_client=ai),
+        handle_tool=_make_tool_handler(storage=storage, container=container, ai_client=ai),
     )
     return str(reply)
