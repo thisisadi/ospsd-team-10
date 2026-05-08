@@ -51,7 +51,7 @@ def running_service() -> Generator[tuple[str, subprocess.Popen[str]], None, None
     env["HOST"] = "127.0.0.1"
     env["PORT"] = str(port)
     env["OPENAI_API_KEY"] = "test-key"
-    env["AGENT_SERVICE_KEY"] = "test-key"
+    env["AGENT_API_KEY"] = "test-key"
     env.setdefault("SESSION_SECRET_KEY", "blackbox-test-secret")
 
     process = subprocess.Popen(
