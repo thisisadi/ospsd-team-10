@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Protocol
 
 from http_chat_client_impl.client import HttpChatClient
 
 
-def test_send_message_falls_back_to_raw_http_when_generated_parser_breaks(monkeypatch) -> None:
+class MonkeyPatchLike(Protocol):
+    def setenv(self, name: str, value: str, prepend: str | None = None) -> None: ...
+
+    def setattr(self, target: str, value: object, *, raising: bool = True) -> None: ...
+
+
+def test_send_message_falls_back_to_raw_http_when_generated_parser_breaks(monkeypatch: MonkeyPatchLike) -> None:
     monkeypatch.setenv("CHAT_SERVICE_BASE_URL", "https://chat.example.com")
     monkeypatch.setenv("CHAT_SESSION_ID", "session-123")
 
@@ -23,7 +30,7 @@ def test_send_message_falls_back_to_raw_http_when_generated_parser_breaks(monkey
     assert client.send_message("C1", "hello") == "m-123"
 
 
-def test_send_message_reads_message_id_from_raw_content_when_parsed_is_none(monkeypatch) -> None:
+def test_send_message_reads_message_id_from_raw_content_when_parsed_is_none(monkeypatch: MonkeyPatchLike) -> None:
     monkeypatch.setenv("CHAT_SERVICE_BASE_URL", "https://chat.example.com")
     monkeypatch.setenv("CHAT_SESSION_ID", "session-123")
 
@@ -41,7 +48,7 @@ def test_send_message_reads_message_id_from_raw_content_when_parsed_is_none(monk
     assert client.send_message("C2", "ping") == "m-xyz"
 
 
-def test_send_message_uses_single_request_call(monkeypatch) -> None:
+def test_send_message_uses_single_request_call(monkeypatch: MonkeyPatchLike) -> None:
     monkeypatch.setenv("CHAT_SERVICE_BASE_URL", "https://chat.example.com")
     monkeypatch.setenv("CHAT_SESSION_ID", "session-123")
     calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
