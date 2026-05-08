@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from chat_client_api.message import ChatMessage
+
 _NO_CHAT_CLIENT = "No chat client registered. Did you import http_chat_client_impl?"
 
 # Use a mutable container to avoid `global` assignment lint (PLW0603).
@@ -25,6 +27,11 @@ class ChatClient(ABC):
     @abstractmethod
     def check_health(self) -> bool:
         """Return True if the remote service reports healthy, False otherwise (without raising)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_messages(self, channel: str, *, limit: int = 10, cursor: str | None = None) -> list[ChatMessage]:
+        """Return recent messages for one channel from the external chat service."""
         raise NotImplementedError
 
 
