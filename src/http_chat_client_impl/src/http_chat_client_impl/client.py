@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -10,13 +11,10 @@ import httpx
 from chat_client_service_api_client.api.default import (
     get_messages_messages_get,
     health_health_get,
-    send_message_messages_post,
 )
 from chat_client_service_api_client.client import Client as OpenApiClient
 from chat_client_service_api_client.models.get_messages_response import GetMessagesResponse
 from chat_client_service_api_client.models.http_validation_error import HTTPValidationError
-from chat_client_service_api_client.models.send_message_request import SendMessageRequest
-from chat_client_service_api_client.models.send_message_response_model import SendMessageResponseModel
 
 from chat_client_api import (
     ChatClient,
@@ -90,36 +88,33 @@ class HttpChatClient(ChatClient):
         client = self._ensure_api(base_url)
 
         try:
-            detailed = send_message_messages_post.sync_detailed(  # type: ignore[attr-defined]
-                client=client,
-                body=SendMessageRequest(
-                    channel=channel,
-                    text=text,
-                ),
-                x_session_id=session_id,
+            response = client.get_httpx_client().request(
+                method="post",
+                url="/messages",
+                headers={"Content-Type": "application/json", "X-Session-ID": session_id},
+                json={"channel": channel, "text": text},
             )
         except httpx.RequestError as exc:
             network_detail = f"{MSG_NETWORK} ({type(exc).__name__})."
             raise ChatServiceError(network_detail) from exc
 
-        if _is_auth_rejection(int(detailed.status_code)):
+        status_code = int(response.status_code)
+        if _is_auth_rejection(status_code):
             raise ChatServiceAuthError(MSG_AUTH_SESSION)
 
-        if int(detailed.status_code) == HTTPStatus.UNPROCESSABLE_ENTITY:
-            raise ChatServiceError(
-                _validation_error_message(parsed=detailed.parsed),
-                status_code=int(HTTPStatus.UNPROCESSABLE_ENTITY),
-            )
+        if status_code == HTTPStatus.UNPROCESSABLE_ENTITY:
+            raise ChatServiceError(MSG_VALIDATION, status_code=int(HTTPStatus.UNPROCESSABLE_ENTITY))
 
-        if detailed.status_code != HTTPStatus.OK or detailed.parsed is None:
-            body_preview = _safe_preview_bytes(detailed.content)
-            msg = f"{MSG_UNEXPECTED_SEND} (status={int(detailed.status_code)}; body={body_preview!s})."
-            raise ChatServiceError(msg, status_code=int(detailed.status_code))
+        if status_code != HTTPStatus.OK:
+            body_preview = _safe_preview_bytes(response.content)
+            msg = f"{MSG_UNEXPECTED_SEND} (status={status_code}; body={body_preview!s})."
+            raise ChatServiceError(msg, status_code=status_code)
 
-        if isinstance(detailed.parsed, SendMessageResponseModel) and detailed.parsed.message_id:
-            return str(detailed.parsed.message_id)
+        parsed_message_id = _extract_message_id_from_bytes(response.content)
+        if parsed_message_id is not None:
+            return parsed_message_id
 
-        raise ChatServiceError(MSG_NO_MESSAGE_ID, status_code=int(detailed.status_code))
+        raise ChatServiceError(MSG_NO_MESSAGE_ID, status_code=status_code)
 
     def check_health(self) -> bool:
         """Check if the chat service is healthy."""
@@ -175,6 +170,20 @@ def _safe_preview_bytes(data: bytes, limit: int = 512) -> str:
     if len(text) > limit:
         return f"{text[:limit]}…"
     return text
+
+
+def _extract_message_id_from_bytes(data: bytes) -> str | None:
+    """Parse a Team 9 send-message payload and return message_id when present."""
+    try:
+        payload = json.loads(data.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    raw_id = payload.get("message_id")
+    if isinstance(raw_id, str) and raw_id:
+        return raw_id
+    return None
 
 
 def _to_chat_message(model: MessageModel) -> ChatMessage:

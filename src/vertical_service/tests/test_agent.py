@@ -200,7 +200,7 @@ def test_agent_summarize_shortcut_returns_summary(
 
 
 def test_storage_tool_definitions_count() -> None:
-    assert len(storage_tool_definitions()) == 3
+    assert len(storage_tool_definitions()) == 5
 
 
 def test_default_storage_container_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -276,6 +276,40 @@ def test_make_tool_handler_summarize_tool(fake_openai_client: DummyAIClient) -> 
     )
     raw = handler("summarize_storage_file", {"object_key": "f.txt"})
     assert "summary" in raw.lower() or "Summary" in raw
+
+
+def test_make_tool_handler_upload_text_tool() -> None:
+    storage = MagicMock()
+    uploaded = MagicMock()
+    uploaded.model_dump.return_value = {"object_name": "notes/dev.txt"}
+    storage.upload_obj.return_value = uploaded
+    ai = MagicMock()
+    handler = _make_tool_handler(storage=storage, container="bucket", ai_client=ai)
+
+    raw = handler(
+        "upload_text_as_file",
+        {
+            "object_key": "notes/dev.txt",
+            "text": "hello from tool",
+        },
+    )
+
+    assert "uploaded" in raw
+    assert "notes/dev.txt" in raw
+    storage.upload_obj.assert_called_once()
+
+
+def test_make_tool_handler_create_container_tool_with_provider_method() -> None:
+    storage = MagicMock()
+    storage.create_container = MagicMock()
+    ai = MagicMock()
+    handler = _make_tool_handler(storage=storage, container="bucket", ai_client=ai)
+
+    raw = handler("create_storage_container", {"container": "dev-test"})
+
+    assert '"created": true' in raw.lower()
+    assert "dev-test" in raw
+    storage.create_container.assert_called_once_with("dev-test")
 
 
 def test_run_agent_turn_delegates_to_tool_loop(monkeypatch: pytest.MonkeyPatch) -> None:
