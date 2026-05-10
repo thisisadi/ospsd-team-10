@@ -25,9 +25,8 @@ def test_setup_startup_raises_without_openai_key(monkeypatch: pytest.MonkeyPatch
         return fake_storage
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    startup = app.router.on_startup[0]
-    with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"):
-        startup()
+    with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"), TestClient(app):
+        pass
 
 
 def test_setup_startup_sets_clients(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -44,8 +43,9 @@ def test_setup_startup_sets_clients(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
     monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
-    startup = app.router.on_startup[0]
-    startup()
+    with TestClient(app):
+        pass
+
     assert app.state.storage_client is fake_storage
     assert app.state.ai_client == {"api_key": "unit-key"}
 

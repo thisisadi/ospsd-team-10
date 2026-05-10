@@ -17,6 +17,8 @@ from vertical_adapter.adapter import CloudStorageServiceAdapter, GeneratedStorag
 if TYPE_CHECKING:
     from collections.abc import Generator
 
+pytestmark = pytest.mark.e2e_live_cloud
+
 BASE_URL = os.getenv("SERVICE_BASE_URL", "http://127.0.0.1:8000")
 BUCKET = os.getenv("AWS_S3_BUCKET", "test-bucket")
 SESSION_TOKEN = os.getenv("INTEGRATION_SESSION_TOKEN")

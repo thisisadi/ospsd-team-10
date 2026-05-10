@@ -193,6 +193,8 @@ Both layers (Prometheus + CloudWatch) provide telemetry from the deployed servic
 
 ### Infrastructure as Code (Terraform)
 
+This repository includes bootstrap Terraform under `infra/terraform/` for shared observability primitives and local environment setup. The full production AWS App Runner stack lives in a dedicated repo ([ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra)). Secrets are supplied through CircleCI/platform/AWS environment mechanisms, not source control.
+
 Infrastructure lives in a dedicated repo ([ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra)) and provisions:
 
 | Resource                                   | Purpose                                                           |

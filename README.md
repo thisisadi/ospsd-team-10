@@ -178,14 +178,22 @@ uv run pytest
 
 ## Testing Strategy
 
+<<<<<<< Updated upstream
 - **Unit tests** (`src/*/tests/`): Mocked dependencies (fast)
 - **Integration tests** (`tests/integration/`): DI wiring; optional live storage service; **Team 9** (`tests/integration/test_agent_team9_integration.py`) when `CHAT_SERVICE_BASE_URL`, `CHAT_SESSION_ID`, and `INTEGRATION_AGENT_CHANNEL_ID` are set (stub AI, mock storage — no OpenAI)
 - **E2E tests** (`tests/e2e/`): Shared flow helper for **S3** (AWS creds) and **remote adapter** (`SERVICE_BASE_URL`, `INTEGRATION_SESSION_TOKEN`, `AWS_S3_BUCKET`)
+=======
+- **Unit / component tests**: Under each package’s `src/<pkg>/tests/` with mocks/fakes (OpenAI SDK never hits network in `openai_ai_client_impl/tests`; HTTP chat patched in `http_chat_client_impl/tests`).
+- **Integration tests** (`tests/integration/`): DI wiring (`test_fastapi_di_wiring.py`), provider switching demos, **AI tool → mock storage → ChatClient reply** (`test_ai_tool_cross_vertical_integration.py`), optional live Team 9 harness (`test_agent_team9_integration.py`).
+- **E2E** (`tests/e2e/`): `running_service` subprocess black-box tests (`e2e`); AWS / deployed-service flows gated behind `e2e_live_cloud`.
+- Live-cloud integration tests such as `tests/integration/test_storage_integration.py` are explicitly marked `e2e_live_cloud` so CI stays deterministic and manual execution is required when AWS/service env vars are available.
+>>>>>>> Stashed changes
 
 ## CI/CD
 
 CircleCI pipeline (`.circleci/config.yml`):
 
+<<<<<<< Updated upstream
 1. **build**: Install deps, verify versions, build and push Docker image to ECR
 2. **lint**: ruff check + format
 3. **typecheck**: mypy strict
@@ -193,6 +201,15 @@ CircleCI pipeline (`.circleci/config.yml`):
 5. **test_team9_chat_optional**: Live Team 9 poll + reply + in-process `/agent` with stub AI (if `CHAT_*` and `INTEGRATION_AGENT_CHANNEL_ID` are set)
 6. **test_e2e_optional**: E2E tests (if AWS credentials present)
 7. **deploy_render_hook** (optional): If `RENDER_DEPLOY_HOOK_URL` is set in CircleCI project env, triggers a Render deploy hook after tests
+=======
+1. **`install_workspace`** — `uv sync --group dev` (no `PYTHONPATH`).
+2. **`lint`** — `uv run ruff check .` + `ruff format --check`.
+3. **`typecheck`** — `uv run mypy .` (strict).
+4. **`test_all`** — `pytest -m "not team9_chat and not e2e_live_cloud"` with coverage XML/HTML artifacts + **`--cov-fail-under=84`** (JUnit uploaded).
+5. **`test_team9_chat_optional`** / **`test_e2e_live_cloud_optional`** — run only when the respective secrets/env vars exist.
+6. **`docker_build_push`** — requires lint + typecheck + **`test_all`** (AWS CLI + ECR login secrets supplied via CircleCI contexts/project settings — never committed).
+7. **`deploy_render_hook`** — runs only after **`docker_build_push`** succeeds (`RENDER_DEPLOY_HOOK_URL` from context).
+>>>>>>> Stashed changes
 
 Artifacts: Coverage reports, test results
 
@@ -209,6 +226,8 @@ Artifacts: Coverage reports, test results
 **Service URL:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com](https://i7bgt2fkwq.us-east-1.awsapprunner.com)  
 **API Docs:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs](https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs)  
 **Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics)
+
+This repo includes bootstrap Terraform under `infra/terraform/`, while the full production AWS App Runner stack is maintained in the dedicated repo [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra). Secrets are supplied through CircleCI/platform/AWS environment mechanisms, not source control.
 
 Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra).
 

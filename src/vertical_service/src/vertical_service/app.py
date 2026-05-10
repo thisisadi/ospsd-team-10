@@ -3,7 +3,8 @@
 import logging
 import os
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from openai_ai_client_impl.client import OpenAIAIClient
@@ -96,10 +97,10 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
 
 # ---- Startup ----
 def setup_startup(app: FastAPI) -> None:
-    """Configure Prometheus metrics and attach middleware to the app."""
+    """Configure application startup as a lifespan handler."""
 
-    @app.on_event("startup")
-    def startup() -> None:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("Initializing application state")
 
         app.state.storage_client = create_storage_client()
@@ -112,6 +113,9 @@ def setup_startup(app: FastAPI) -> None:
         app.state.ai_client = OpenAIAIClient(api_key=api_key)
 
         logger.info("Application state initialized")
+        yield
+
+    app.router.lifespan_context = lifespan
 
 
 # ---- Routes ----

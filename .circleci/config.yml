@@ -130,8 +130,13 @@ jobs:
               --cov=vertical_impl \
               --cov-report=term-missing \
               --cov-report=xml:coverage-reports/coverage.xml \
+<<<<<<< Updated upstream
               --cov-report=html:coverage-reports/html
 
+=======
+              --cov-report=html:coverage-reports/html \
+              --cov-fail-under=84
+>>>>>>> Stashed changes
       - store_test_results:
           path: test-results/unit_integration
 
