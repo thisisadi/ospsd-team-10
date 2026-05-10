@@ -3,14 +3,25 @@ name = "ospsd-team-10"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "ai-client-api",
+    "chat-client-api",
+    "chat-client-service-api-client",
     "cloud-storage-api",
+    "http-chat-client-impl",
+    "openai-ai-client-impl",
     "prometheus-client",
+    "vertical-adapter",
+    "vertical-api",
+    "vertical-impl",
+    "vertical-service",
+    "vertical-service-api-client",
 ]
 
 [tool.uv.workspace]
 members = [
   "src/ai_client_api",
   "src/openai_ai_client_impl",
+  "src/vertical_api",
   "src/vertical_service_api_client",
   "src/vertical_adapter",
   "src/vertical_service",
@@ -23,6 +34,7 @@ members = [
 [tool.uv.sources]
 ai-client-api = { workspace = true }
 openai-ai-client-impl = { workspace = true }
+vertical-api = { workspace = true }
 vertical-service-api-client = { workspace = true }
 vertical-adapter = { workspace = true }
 vertical-service = { workspace = true }
@@ -61,6 +73,8 @@ ignore = [
   "D103",
   "ANN001",
   "ANN201",
+  "ANN401",
+  "TC002",
   "PLR2004",
   "PTH110",
   "PTH107",
@@ -75,6 +89,7 @@ explicit_package_bases = true
 mypy_path = [
   "src/ai_client_api/src",
   "src/openai_ai_client_impl/src",
+  "src/vertical_api/src",
   "src/vertical_service_api_client/src",
   "src/vertical_adapter/src",
   "src/vertical_service/src",
@@ -86,7 +101,11 @@ mypy_path = [
 ignore_missing_imports = false
 warn_unused_ignores = false
 exclude = [
+  # Generated OpenAPI clients are checked by package tests, but their generated
+  # attrs models and response wrappers should not block strict repo-wide mypy.
+  "src/chat_client_service_api_client/src",
   "src/vertical_api",
+  "src/vertical_service_api_client/src",
 ]
 
 # ✅ FIX for prometheus_client (mypy error)
@@ -97,10 +116,22 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = [
+  "vertical_service.app",
+  "vertical_service.routes.*",
+]
+disable_error_code = ["untyped-decorator"]
+
 [tool.pytest.ini_options]
 testpaths = [
   "tests",
+  "src/ai_client_api/tests",
+  "src/chat_client_api/tests",
+  "src/http_chat_client_impl/tests",
+  "src/openai_ai_client_impl/tests",
   "src/vertical_adapter/tests",
+  "src/vertical_api/tests",
   "src/vertical_impl/tests",
   "src/vertical_service/tests",
   "src/vertical_service_api_client/tests",

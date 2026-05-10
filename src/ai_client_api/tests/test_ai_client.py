@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import pytest
+from ai_client_api.client import ToolHandler
 
 from ai_client_api import AIClient, ToolDefinition, get_client, register_client
-from ai_client_api.client import ToolHandler
 
 
 class FakeAIClient(AIClient):

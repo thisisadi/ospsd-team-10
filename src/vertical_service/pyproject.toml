@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "vertical-adapter",
   "fastapi>=0.115.0",
+  "starlette>=0.40.0",
   "itsdangerous>=2.2.0",
   "vertical-impl",
   "http-chat-client-impl",

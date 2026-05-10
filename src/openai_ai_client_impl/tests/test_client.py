@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-
 from openai_ai_client_impl.client import OpenAIAIClient
 
 
