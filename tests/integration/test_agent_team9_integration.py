@@ -11,11 +11,11 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from chat_client_api import get_client
+from chat_client_api.exceptions import ChatServiceError
 from fastapi.testclient import TestClient
 from vertical_service.app import create_app
 from vertical_service.routes.agent import _get_openai_client
-
-from chat_client_api import get_client
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -60,7 +60,8 @@ class _StubAIClient:
 def _require_team9_env() -> None:
     if not _team9_env_ready():
         pytest.skip(
-            "Set CHAT_SERVICE_BASE_URL, CHAT_SESSION_ID, and INTEGRATION_AGENT_CHANNEL_ID (see README — Team 9 integration)."
+            "Set CHAT_SERVICE_BASE_URL, CHAT_SESSION_ID, and "
+            "INTEGRATION_AGENT_CHANNEL_ID (see README — Team 9 integration)."
         )
 
 
@@ -73,13 +74,14 @@ def agent_app(
     monkeypatch.setenv("SESSION_SECRET_KEY", "integration-test-session-secret")
     monkeypatch.setenv("STORAGE_PROVIDER", "mock")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-integration-placeholder-not-used")
-    # Channel id comes from env (fixture gate ensures it is set).
-    channel = os.environ["INTEGRATION_AGENT_CHANNEL_ID"].strip()
     monkeypatch.setenv("AWS_S3_BUCKET", "integration-mock-bucket")
+
+    channel = os.environ["INTEGRATION_AGENT_CHANNEL_ID"].strip()
 
     app = create_app()
     stub = _StubAIClient()
     app.dependency_overrides[_get_openai_client] = lambda: stub
+
     try:
         yield app, channel
     finally:
@@ -91,7 +93,14 @@ def test_agent_turn_hits_team9_poll_and_reply(agent_app: tuple[FastAPI, str]) ->
     app, channel = agent_app
     probe = f"integration-probe-{uuid.uuid4()}"
 
-    get_client().send_message(channel, probe)
+    try:
+        get_client().send_message(channel, probe)
+    except ChatServiceError as exc:
+        if "Unknown auth session" in str(exc):
+            pytest.skip(
+                "Team 9 live integration skipped: CHAT_SESSION_ID is expired or invalid."
+            )
+        raise
 
     headers: dict[str, str] = {}
     agent_key = os.environ.get("AGENT_API_KEY", "").strip()
