@@ -148,6 +148,14 @@ export AWS_SECRET_ACCESS_KEY="xxx"
 
 In CircleCI: Add these as project environment variables.
 
+**Team 9 + `/agent` integration (CI):** To run the live chat integration test on every pipeline, add project environment variables:
+
+- `CHAT_SERVICE_BASE_URL` — Team 9 chat API base URL (same as production usage).
+- `CHAT_SESSION_ID` — Session id sent as `X-Session-ID` (list + post messages).
+- `INTEGRATION_AGENT_CHANNEL_ID` — A dedicated channel id for automation (tests post a unique probe message and the agent reply there).
+
+Optional: `AGENT_API_KEY` — if set, the test sends matching `X-API-Key` on `POST /agent` (same as your deployed service).
+
 ## Running Tools
 
 ```bash
@@ -160,7 +168,8 @@ uv run mypy .
 
 # Tests
 uv run pytest                             # All tests
-uv run pytest tests src -m "not e2e"       # Unit + integration
+uv run pytest tests src -m "not e2e and not team9_chat"   # Unit + integration (excludes live Team 9)
+uv run pytest -m "team9_chat" -v          # Team 9 + stub AI (needs CHAT_* + INTEGRATION_AGENT_CHANNEL_ID)
 uv run pytest tests/e2e/ -m "e2e" -v      # E2E only
 
 # Coverage (threshold: 85%; matches pyproject source layout)
@@ -170,7 +179,7 @@ uv run pytest
 ## Testing Strategy
 
 - **Unit tests** (`src/*/tests/`): Mocked dependencies (fast)
-- **Integration tests** (`tests/integration/`): DI wiring; optional live service when env vars are set
+- **Integration tests** (`tests/integration/`): DI wiring; optional live storage service; **Team 9** (`tests/integration/test_agent_team9_integration.py`) when `CHAT_SERVICE_BASE_URL`, `CHAT_SESSION_ID`, and `INTEGRATION_AGENT_CHANNEL_ID` are set (stub AI, mock storage — no OpenAI)
 - **E2E tests** (`tests/e2e/`): Shared flow helper for **S3** (AWS creds) and **remote adapter** (`SERVICE_BASE_URL`, `INTEGRATION_SESSION_TOKEN`, `AWS_S3_BUCKET`)
 
 ## CI/CD
@@ -180,9 +189,10 @@ CircleCI pipeline (`.circleci/config.yml`):
 1. **build**: Install deps, verify versions, build and push Docker image to ECR
 2. **lint**: ruff check + format
 3. **typecheck**: mypy strict
-4. **test_unit_integration**: Unit + integration tests, coverage report
-5. **test_e2e_optional**: E2E tests (if AWS credentials present)
-6. **deploy_render_hook** (optional): If `RENDER_DEPLOY_HOOK_URL` is set in CircleCI project env, triggers a Render deploy hook after tests
+4. **test_unit_integration**: Unit + integration tests, coverage report (excludes `team9_chat` marks)
+5. **test_team9_chat_optional**: Live Team 9 poll + reply + in-process `/agent` with stub AI (if `CHAT_*` and `INTEGRATION_AGENT_CHANNEL_ID` are set)
+6. **test_e2e_optional**: E2E tests (if AWS credentials present)
+7. **deploy_render_hook** (optional): If `RENDER_DEPLOY_HOOK_URL` is set in CircleCI project env, triggers a Render deploy hook after tests
 
 Artifacts: Coverage reports, test results
 

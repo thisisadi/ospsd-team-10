@@ -117,6 +117,7 @@ markers = [
   "unit: marks tests as unit tests (fast, isolated)",
   "integration: marks tests as integration tests (medium speed, real dependencies)",
   "e2e: marks tests as end-to-end tests (slow, full system)",
+  "team9_chat: marks tests that require live Team 9 chat (CHAT_* and INTEGRATION_AGENT_CHANNEL_ID)",
   "circleci: marks tests that can run in CI/CD environments without local credentials",
   "aws_credentials: marks tests that require AWS credentials / configured env vars",
 ]
