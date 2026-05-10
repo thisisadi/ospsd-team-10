@@ -9,13 +9,14 @@ Repository for Open Source & Professional Software Development CS-GY 9223
 - Gurjeet Kaur (gk2845)
 - Chloe Lee (hl6181)
 
-**Related Repositories:** [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra) — Terraform infrastructure and infra CI/CD pipeline for AWS App Runner deployment
+**Related Repositories:** [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra) — Terraform infrastructure and infra CI/CD pipeline for AWS App Runner deployment  
+**HW3 branch:** active development and CircleCI defaults target **`hw-3`** (also **`main`**).
 
 ---
 
 # Cloud Storage Client — Component-Based Python Implementation
 
-**Assignment**: HW1 and HW2 — OSPSD CS-GY 9223 (Spring '26)
+**Assignment**: HW1–HW3 — OSPSD CS-GY 9223 (Spring ’26)
 
 ## Overview
 
@@ -45,9 +46,19 @@ Application and demo workflow code depend only on the shared `CloudStorageClient
 
 ## Documentation
 
-- **[docs/DESIGN.md](docs/DESIGN.md)** — design document (architecture, API decisions, HW2 extension)
-- **MkDocs site** — run `uv run mkdocs serve`; the **Design** page is `docs/DESIGN.md`
-- **Live site (GitHub Pages)** — [https://thisisadi.github.io/ospsd-team-10/](https://thisisadi.github.io/ospsd-team-10/)
+- **[docs/DESIGN.md](docs/DESIGN.md)** — canonical design document (architecture, AI tools, cross-vertical integration, observability, testing, peer review)
+- **[DESIGN.md](DESIGN.md)** — root pointer to `docs/DESIGN.md`
+- **[VIDEO_DEMO.md](VIDEO_DEMO.md)** — demo checklist for the HW3 recording (pipeline, tests, `/health`, `/metrics`)
+- **MkDocs** — `uv run mkdocs serve`
+- **GitHub Pages** — [https://thisisadi.github.io/ospsd-team-10/](https://thisisadi.github.io/ospsd-team-10/)
+
+### HW3 — Architecture snapshot
+
+- **Storage**: `cloud-storage-api` interface + provider switching (`STORAGE_PROVIDER=s3|gcp|mock`) inside `vertical_service`.
+- **AI**: `ai_client_api.AIClient` (ABC: `send_message`, `run_chat_with_tools`) with `openai_ai_client_impl.OpenAIAIClient` (env keys only; Tenacity retries on transient OpenAI errors).
+- **Cross-vertical chat**: `chat_client_api` + `http_chat_client_impl` (`get_client()` / `register_client_factory()`); `/agent` never imports Team 9 SDK types directly.
+- **IaC**: `infra/terraform/` bootstrap (`terraform init && terraform plan`); production modules remain in **ospsd-team-10-infra**.
+- **Telemetry**: Prometheus `/metrics` (latency histogram with `status_class`, separate 4xx/5xx counters) + AWS App Runner → CloudWatch dashboards (see DESIGN.md).
 
 ## Architecture
 
@@ -71,13 +82,12 @@ tests/
 
 ## Setup
 
-**Prerequisites**: Python 3.12+, uv package manager
+**Prerequisites**: Python 3.12+, [uv](https://docs.astral.sh/uv/)
 
 ```bash
-# Install dependencies
 uv venv --python 3.12
-source .venv/bin/activate
-uv sync --all-packages --group dev
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+uv sync --group dev       # installs all workspace packages via root dependency pins — no PYTHONPATH needed
 ```
 
 ## Docker (service)
@@ -159,49 +169,31 @@ Optional: `AGENT_API_KEY` — if set, the test sends matching `X-API-Key` on `PO
 ## Running Tools
 
 ```bash
-# Lint & format
 uv run ruff check .
-uv run ruff format .
+uv run ruff format --check .
 
-# Type check (strict)
 uv run mypy .
 
-# Tests
-uv run pytest                             # All tests
-uv run pytest tests src -m "not e2e and not team9_chat"   # Unit + integration (excludes live Team 9)
-uv run pytest -m "team9_chat" -v          # Team 9 + stub AI (needs CHAT_* + INTEGRATION_AGENT_CHANNEL_ID)
-uv run pytest tests/e2e/ -m "e2e" -v      # E2E only
+uv run pytest -v
+uv run pytest --cov    # same threshold + packages as CI (82%+)
 
-# Coverage (threshold: 85%; matches pyproject source layout)
-uv run pytest
+# Focused markers
+uv run pytest -m "not team9_chat and not e2e_live_cloud"   # default CI set + subprocess E2E
+uv run pytest -m "team9_chat" -v                         # live Team 9 (needs CHAT_* env vars)
+uv run pytest -m "e2e_live_cloud" -v                     # real AWS / deployed adapter flows
 ```
 
 ## Testing Strategy
 
-<<<<<<< Updated upstream
-- **Unit tests** (`src/*/tests/`): Mocked dependencies (fast)
-- **Integration tests** (`tests/integration/`): DI wiring; optional live storage service; **Team 9** (`tests/integration/test_agent_team9_integration.py`) when `CHAT_SERVICE_BASE_URL`, `CHAT_SESSION_ID`, and `INTEGRATION_AGENT_CHANNEL_ID` are set (stub AI, mock storage — no OpenAI)
-- **E2E tests** (`tests/e2e/`): Shared flow helper for **S3** (AWS creds) and **remote adapter** (`SERVICE_BASE_URL`, `INTEGRATION_SESSION_TOKEN`, `AWS_S3_BUCKET`)
-=======
 - **Unit / component tests**: Under each package’s `src/<pkg>/tests/` with mocks/fakes (OpenAI SDK never hits network in `openai_ai_client_impl/tests`; HTTP chat patched in `http_chat_client_impl/tests`).
 - **Integration tests** (`tests/integration/`): DI wiring (`test_fastapi_di_wiring.py`), provider switching demos, **AI tool → mock storage → ChatClient reply** (`test_ai_tool_cross_vertical_integration.py`), optional live Team 9 harness (`test_agent_team9_integration.py`).
 - **E2E** (`tests/e2e/`): `running_service` subprocess black-box tests (`e2e`); AWS / deployed-service flows gated behind `e2e_live_cloud`.
 - Live-cloud integration tests such as `tests/integration/test_storage_integration.py` are explicitly marked `e2e_live_cloud` so CI stays deterministic and manual execution is required when AWS/service env vars are available.
->>>>>>> Stashed changes
 
 ## CI/CD
 
-CircleCI pipeline (`.circleci/config.yml`):
+CircleCI (runs on **`hw-3`** and **`main`**):
 
-<<<<<<< Updated upstream
-1. **build**: Install deps, verify versions, build and push Docker image to ECR
-2. **lint**: ruff check + format
-3. **typecheck**: mypy strict
-4. **test_unit_integration**: Unit + integration tests, coverage report (excludes `team9_chat` marks)
-5. **test_team9_chat_optional**: Live Team 9 poll + reply + in-process `/agent` with stub AI (if `CHAT_*` and `INTEGRATION_AGENT_CHANNEL_ID` are set)
-6. **test_e2e_optional**: E2E tests (if AWS credentials present)
-7. **deploy_render_hook** (optional): If `RENDER_DEPLOY_HOOK_URL` is set in CircleCI project env, triggers a Render deploy hook after tests
-=======
 1. **`install_workspace`** — `uv sync --group dev` (no `PYTHONPATH`).
 2. **`lint`** — `uv run ruff check .` + `ruff format --check`.
 3. **`typecheck`** — `uv run mypy .` (strict).
@@ -209,9 +201,8 @@ CircleCI pipeline (`.circleci/config.yml`):
 5. **`test_team9_chat_optional`** / **`test_e2e_live_cloud_optional`** — run only when the respective secrets/env vars exist.
 6. **`docker_build_push`** — requires lint + typecheck + **`test_all`** (AWS CLI + ECR login secrets supplied via CircleCI contexts/project settings — never committed).
 7. **`deploy_render_hook`** — runs only after **`docker_build_push`** succeeds (`RENDER_DEPLOY_HOOK_URL` from context).
->>>>>>> Stashed changes
 
-Artifacts: Coverage reports, test results
+Bootstrap IaC locally: `cd infra/terraform && terraform init`
 
 ## Deployment
 
@@ -235,9 +226,8 @@ Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.
 
 **ai_client_api**:
 
-- `AIClient` ABC defining the minimal contract for AI providers
-- Single abstract method: `send_message(prompt, context)` returns a text reply
-- Zero external dependencies — decouples agent logic from any specific AI provider
+- `AIClient` ABC (`send_message`, `run_chat_with_tools`) — framework-free port with zero provider SDK leakage
+- Implemented by `openai_ai_client_impl.OpenAIAIClient` (reads `OPENAI_API_KEY` / `OPENAI_MODEL` only from env)
 
 **chat_client_api**:
 
@@ -256,15 +246,13 @@ Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.
 
 - `HttpChatClient` implements `ChatClient` over Team 9's REST API
 - Reads `CHAT_SERVICE_BASE_URL` and `CHAT_SESSION_ID` from environment variables
-- Handles auth errors, validation errors, and network failures gracefully
-- Auto-registers itself as the active chat client on import via `_register_default()`
+- Registers via `_register_default()` **only if** no chat implementation has called `register_client_factory` yet (tests can inject fakes first)
 
 **openai_ai_client_impl**:
 
 - `OpenAIAIClient` implements `AIClient` using OpenAI Chat Completions
-- Single-turn `send_message` with optional context injection into system prompt
-- Multi-turn `run_chat_with_tools` loop — executes tool calls until the model responds with text (up to 8 rounds)
-- Reads `OPENAI_API_KEY` and `OPENAI_MODEL` from environment variables
+- Tenacity retries on rate limits / connection timeouts around `chat.completions.create`
+- Typed storage tool **schemas** are authored as Pydantic models in `vertical_service.storage_tool_models` and exported as OpenAI-compatible JSON schemas
 
 **vertical_api**:
 
@@ -293,20 +281,21 @@ Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.
 
 ## Configuration (pyproject.toml)
 
-**Ruff**: `select = ["ALL"]` with justified ignores  
-**MyPy**: `strict = true` with AWS SDK overrides  
-**Pytest**: Coverage threshold 85%, test markers (unit/integration/e2e)  
-**Root workspace**: Both components listed as members
+**Ruff**: `select = ["ALL"]` with justified `per-file-ignores` for ABC-heavy modules/tests  
+**MyPy**: `strict = true` (+ Prometheus stubs override)  
+**Pytest / Coverage**: Multi-package `--cov`, **`fail_under = 82`**, markers (`e2e`, `e2e_live_cloud`, `team9_chat`, …)  
+**Workspace**: All HW3 packages are `[tool.uv.workspace]` members **and** explicit root dependencies so editable installs work with plain `uv sync`.
 
 ## Quick Commands
 
-| Task     | Command                                         |
-| -------- | ----------------------------------------------- |
-| Install  | `uv sync --all-packages --group dev`            |
-| Lint     | `uv run ruff check . && ruff format .`          |
-| Type     | `uv run mypy .`                                 |
-| Test     | `uv run pytest`                                 |
-| Coverage | `uv run pytest` (threshold in `pyproject.toml`) |
+| Task     | Command                                  |
+| -------- | ---------------------------------------- |
+| Install  | `uv sync --group dev`                    |
+| Lint     | `uv run ruff check .`                    |
+| Format   | `uv run ruff format --check .`           |
+| Type     | `uv run mypy .`                          |
+| Test     | `uv run pytest -v`                       |
+| Coverage | `uv run pytest --cov`                    |
 
 ---
 
