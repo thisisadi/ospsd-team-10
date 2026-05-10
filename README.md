@@ -196,9 +196,9 @@ Artifacts: Coverage reports, test results
 
 ### HW3 — AWS App Runner
 
-**Service URL:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/](https://edbym5kujh.us-east-1.awsapprunner.com)  
+**Service URL:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com](https://i7bgt2fkwq.us-east-1.awsapprunner.com)  
 **API Docs:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs](https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs)  
-**Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://edbym5kujh.us-east-1.awsapprunner.com/metrics)
+**Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics)
 
 Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra).
 
