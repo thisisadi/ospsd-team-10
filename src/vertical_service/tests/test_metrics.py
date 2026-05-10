@@ -45,7 +45,13 @@ def test_metrics_updated_after_list_request() -> None:
 
     metrics = client.get("/metrics")
 
-    assert 'vertical_service_requests_total{endpoint="/storage/files/list",method="GET"}' in metrics.text
-    assert 'vertical_service_success_total{endpoint="/storage/files/list",method="GET"}' in metrics.text
+    assert (
+        'vertical_service_requests_total{method="GET",route="/storage/files/list",status="200",status_class="2xx"}'
+        in metrics.text
+    )
+    assert (
+        'vertical_service_success_total{method="GET",route="/storage/files/list",status="200",status_class="2xx"}'
+        in metrics.text
+    )
 
     app.dependency_overrides.clear()

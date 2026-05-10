@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI deployment unit for the cloud storage client (OAuth + storage API)"
 requires-python = ">=3.11"
 dependencies = [
+  "cloud-storage-api",
   "vertical-adapter",
   "fastapi>=0.115.0",
   "itsdangerous>=2.2.0",

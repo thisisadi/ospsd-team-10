@@ -25,9 +25,8 @@ def test_setup_startup_raises_without_openai_key(monkeypatch: pytest.MonkeyPatch
         return fake_storage
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    startup = app.router.on_startup[0]
-    with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"):
-        startup()
+    with pytest.raises(RuntimeError, match="Missing OPENAI_API_KEY"), TestClient(app):
+        pass
 
 
 def test_setup_startup_sets_clients(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -39,13 +38,14 @@ def test_setup_startup_sets_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_create_storage_client() -> object:
         return fake_storage
 
-    def _fake_openai_client(api_key: str) -> dict[str, str]:
-        return {"api_key": api_key}
+    def _fake_ai_client() -> dict[str, str]:
+        return {"api_key": "unit-key"}
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
-    startup = app.router.on_startup[0]
-    startup()
+    monkeypatch.setattr("vertical_service.app.get_ai_client", _fake_ai_client)
+    with TestClient(app):
+        pass
+
     assert app.state.storage_client is fake_storage
     assert app.state.ai_client == {"api_key": "unit-key"}
 
@@ -57,11 +57,11 @@ def test_metrics_middleware_failure_path(monkeypatch: pytest.MonkeyPatch) -> Non
     def _fake_create_storage_client() -> object:
         return object()
 
-    def _fake_openai_client(api_key: str) -> dict[str, str]:
-        return {"api_key": api_key}
+    def _fake_ai_client() -> dict[str, str]:
+        return {"api_key": "unit-key"}
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
+    monkeypatch.setattr("vertical_service.app.get_ai_client", _fake_ai_client)
     app = app_mod.create_app()
     app.dependency_overrides[require_oauth_session] = lambda: "session"
 
@@ -132,11 +132,11 @@ def test_storage_delete_and_info_exception_mapping(monkeypatch: pytest.MonkeyPat
     def _fake_create_storage_client() -> _FailingStorage:
         return failing_storage
 
-    def _fake_openai_client(api_key: str) -> dict[str, str]:
-        return {"api_key": api_key}
+    def _fake_ai_client() -> dict[str, str]:
+        return {"api_key": "unit-key"}
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
+    monkeypatch.setattr("vertical_service.app.get_ai_client", _fake_ai_client)
     app = app_mod.create_app()
     app.dependency_overrides[require_oauth_session] = lambda: "session"
     app.state.storage_client = failing_storage

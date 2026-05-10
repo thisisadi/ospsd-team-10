@@ -3,10 +3,10 @@
 import logging
 import os
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
-from openai_ai_client_impl.client import OpenAIAIClient
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -16,6 +16,9 @@ from prometheus_client import (
 )
 from starlette.middleware.sessions import SessionMiddleware
 
+import http_chat_client_impl  # noqa: F401
+import openai_ai_client_impl  # noqa: F401
+from ai_client_api import get_client as get_ai_client
 from vertical_service.config import session_secret_key
 from vertical_service.provider_switching.factory import create_storage_client
 from vertical_service.routes import agent, auth, health, storage
@@ -32,28 +35,28 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
     request_count = Counter(
         "vertical_service_requests_total",
         "Total HTTP requests.",
-        ["endpoint", "method"],
+        ["route", "method", "status", "status_class"],
         registry=registry,
     )
 
     success_count = Counter(
         "vertical_service_success_total",
         "Total successful HTTP requests.",
-        ["endpoint", "method"],
+        ["route", "method", "status", "status_class"],
         registry=registry,
     )
 
     failure_count = Counter(
         "vertical_service_failure_total",
         "Total failed HTTP requests.",
-        ["endpoint", "method"],
+        ["route", "method", "status", "status_class", "error_kind"],
         registry=registry,
     )
 
     request_latency = Histogram(
         "vertical_service_request_latency_seconds",
         "HTTP request latency in seconds.",
-        ["endpoint", "method"],
+        ["route", "method", "status", "status_class"],
         registry=registry,
     )
 
@@ -63,26 +66,47 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         start = time.perf_counter()
-        endpoint = request.url.path
+        route = request.url.path
         method = request.method
 
         try:
             response = await call_next(request)
             status_code = response.status_code
         except Exception:
-            request_count.labels(endpoint=endpoint, method=method).inc()
-            failure_count.labels(endpoint=endpoint, method=method).inc()
-            request_latency.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start)
+            status_label = "500"
+            status_class = "5xx"
+            request_count.labels(route=route, method=method, status=status_label, status_class=status_class).inc()
+            failure_count.labels(
+                route=route,
+                method=method,
+                status=status_label,
+                status_class=status_class,
+                error_kind="infrastructure",
+            ).inc()
+            request_latency.labels(route=route, method=method, status=status_label, status_class=status_class).observe(
+                time.perf_counter() - start
+            )
             raise
 
-        request_count.labels(endpoint=endpoint, method=method).inc()
+        status_label = str(status_code)
+        status_class = f"{status_code // 100}xx"
+        request_count.labels(route=route, method=method, status=status_label, status_class=status_class).inc()
 
         if status_code < HTTP_BAD_REQUEST:
-            success_count.labels(endpoint=endpoint, method=method).inc()
+            success_count.labels(route=route, method=method, status=status_label, status_class=status_class).inc()
         else:
-            failure_count.labels(endpoint=endpoint, method=method).inc()
+            error_kind = "domain" if status_code < 500 else "infrastructure"
+            failure_count.labels(
+                route=route,
+                method=method,
+                status=status_label,
+                status_class=status_class,
+                error_kind=error_kind,
+            ).inc()
 
-        request_latency.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start)
+        request_latency.labels(route=route, method=method, status=status_label, status_class=status_class).observe(
+            time.perf_counter() - start
+        )
 
         return response
 
@@ -95,10 +119,10 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
 
 # ---- Startup ----
 def setup_startup(app: FastAPI) -> None:
-    """Configure Prometheus metrics and attach middleware to the app."""
+    """Configure application startup as a lifespan handler."""
 
-    @app.on_event("startup")
-    def startup() -> None:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("Initializing application state")
 
         app.state.storage_client = create_storage_client()
@@ -108,9 +132,12 @@ def setup_startup(app: FastAPI) -> None:
             msg = "Missing OPENAI_API_KEY"
             raise RuntimeError(msg)
 
-        app.state.ai_client = OpenAIAIClient(api_key=api_key)
+        app.state.ai_client = get_ai_client()
 
         logger.info("Application state initialized")
+        yield
+
+    app.router.lifespan_context = lifespan
 
 
 # ---- Routes ----

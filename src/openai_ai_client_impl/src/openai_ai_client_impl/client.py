@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
 from typing import Any
 
-from ai_client_api.client import AIClient
+from ai_client_api.client import AIClient, ToolHandler, register_client_factory
 from openai import OpenAI
 
 
@@ -50,7 +49,7 @@ class OpenAIAIClient(AIClient):
         system_prompt: str,
         user_message: str,
         tools: list[dict[str, Any]],
-        handle_tool: Callable[[str, dict[str, Any]], str],
+        handle_tool: ToolHandler,
         max_tool_rounds: int = 8,
     ) -> str:
         """Run a multi-turn completion, executing tool calls until the model responds with text."""
@@ -103,3 +102,11 @@ class OpenAIAIClient(AIClient):
                 )
 
         return "Tool loop limit reached; try a narrower request."
+
+
+def get_client() -> AIClient:
+    """Return an OpenAI-backed AI client using environment configuration."""
+    return OpenAIAIClient()
+
+
+register_client_factory(get_client)
