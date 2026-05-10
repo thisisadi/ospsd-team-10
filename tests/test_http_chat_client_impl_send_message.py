@@ -27,7 +27,7 @@ def test_send_message_falls_back_to_raw_http_when_generated_parser_breaks(monkey
     )
 
     client = HttpChatClient()
-    assert client.send_message("C1", "hello") == "m-123"
+    assert client.send_message("C1", "hello").message_id == "m-123"
 
 
 def test_send_message_reads_message_id_from_raw_content_when_parsed_is_none(monkeypatch: MonkeyPatchLike) -> None:
@@ -45,7 +45,7 @@ def test_send_message_reads_message_id_from_raw_content_when_parsed_is_none(monk
     )
 
     client = HttpChatClient()
-    assert client.send_message("C2", "ping") == "m-xyz"
+    assert client.send_message("C2", "ping").message_id == "m-xyz"
 
 
 def test_send_message_uses_single_request_call(monkeypatch: MonkeyPatchLike) -> None:
@@ -66,5 +66,5 @@ def test_send_message_uses_single_request_call(monkeypatch: MonkeyPatchLike) -> 
     )
 
     client = HttpChatClient()
-    assert client.send_message("C1", "hello") == "m-abc"
+    assert client.send_message("C1", "hello").message_id == "m-abc"
     assert len(calls) == 1

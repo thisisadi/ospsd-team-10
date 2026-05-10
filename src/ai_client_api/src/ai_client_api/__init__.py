@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from ai_client_api.client import AIClient
+from ai_client_api.client import AIClient, get_ai_client, register_ai_client
 
-__all__ = ["AIClient"]
+__all__ = ["AIClient", "get_ai_client", "register_ai_client"]

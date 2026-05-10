@@ -143,6 +143,6 @@ Ruff strict enabled — ✔
 Mypy strict enabled — ✔  
 Absolute imports only — ✔  
 No unjustified ignores — ✔  
-Coverage > 85% — ✔  
+Coverage threshold (`fail_under` in root `pyproject.toml`, currently **84%**) — ✔  
 Tests isolated — ✔  
 DI architecture — ✔

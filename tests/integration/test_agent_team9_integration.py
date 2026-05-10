@@ -11,11 +11,10 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from chat_client_api import get_client
 from fastapi.testclient import TestClient
 from vertical_service.app import create_app
 from vertical_service.routes.agent import _get_openai_client
-
-from chat_client_api import get_client
 
 if TYPE_CHECKING:
     from collections.abc import Generator

@@ -1,7 +1,7 @@
 [project]
 name = "ospsd-team-10"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "cloud-storage-api",
     "prometheus-client",
@@ -16,7 +16,6 @@ members = [
   "src/vertical_service",
   "src/vertical_impl",
   "src/chat_client_service_api_client",
-  "src/chat_client_api",
   "src/http_chat_client_impl",
 ]
 
@@ -28,13 +27,13 @@ vertical-adapter = { workspace = true }
 vertical-service = { workspace = true }
 vertical-impl = { workspace = true }
 chat-client-service-api-client = { workspace = true }
-chat-client-api = { workspace = true }
+chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API", rev = "ebb37e189065760f2090f1488d376485b7b56b20" }
 http-chat-client-impl = { workspace = true }
 cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage", rev = "v1.0.0" }
 
 [tool.ruff]
 line-length = 130
-target-version = "py311"
+target-version = "py312"
 exclude = [
   "src/vertical_service_api_client/src",
   "src/chat_client_service_api_client",
@@ -53,6 +52,18 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "src/vertical_service/src/vertical_service/agent.py" = ["TC001", "TC002", "TC003"]
 "src/vertical_service/src/vertical_service/routes/agent.py" = ["TC002"]
+"src/http_chat_client_impl/src/http_chat_client_impl/client.py" = [
+  "D102",
+  "D107",
+  "TRY003",
+  "EM101",
+  "EM102",
+  "PLR2004",
+]
+"src/vertical_service/tests/test_agent.py" = [
+  "TC003",
+  "EM101",
+]
 "src/openai_ai_client_impl/src/openai_ai_client_impl/client.py" = ["TC003"]
 "**/test_*.py" = [
   "D100",
@@ -80,7 +91,6 @@ mypy_path = [
   "src/vertical_service/src",
   "src/vertical_impl/src",
   "src/chat_client_service_api_client/src",
-  "src/chat_client_api/src",
   "src/http_chat_client_impl/src",
 ]
 ignore_missing_imports = false

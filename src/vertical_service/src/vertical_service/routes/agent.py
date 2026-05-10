@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import os
-from typing import Annotated, Any, Protocol, cast
+from typing import Annotated, Any, cast
 
+from ai_client_api.client import AIClient
+from chat_client_api import ChatError, Message, get_client
 from cloud_storage_api import CloudStorageClient
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from chat_client_api import ChatMessage, ChatServiceError, get_client, send_agent_response
-from vertical_service.agent import AIClient, default_storage_container, run_agent_turn
+from vertical_service.agent import default_storage_container, run_agent_turn
 from vertical_service.agent_api import (
     ENV_AGENT_API_KEY,
     HTTP_HEADER_X_API_KEY,
     MSG_INVALID_OR_MISSING_KEY,
 )
+from vertical_service.chat_reply import send_agent_response
 
 router = APIRouter()
 
@@ -41,23 +43,6 @@ class AgentResponse(BaseModel):
     sent_message_id: str | None = None
 
 
-class SupportsAgentAI(Protocol):
-    """Minimal protocol for AI clients used by the agent flow."""
-
-    def send_message(self, prompt: str) -> str:
-        """Return a text response for a plain prompt."""
-
-    def run_chat_with_tools(
-        self,
-        *,
-        system_prompt: str,
-        user_message: str,
-        tools: list[dict[str, Any]],
-        handle_tool: object,
-    ) -> str:
-        """Run a tool-enabled chat turn and return the final response."""
-
-
 def _require_service_key(request: Request) -> None:
     expected = os.environ.get(ENV_AGENT_API_KEY)
     if not expected:
@@ -70,7 +55,7 @@ def _require_service_key(request: Request) -> None:
         )
 
 
-def _get_openai_client(request: Request) -> SupportsAgentAI:
+def _get_openai_client(request: Request) -> AIClient:
     raw = getattr(request.app.state, "ai_client", None)
     if raw is None:
         raise HTTPException(
@@ -78,13 +63,13 @@ def _get_openai_client(request: Request) -> SupportsAgentAI:
             detail="AI client is not configured.",
         )
 
-    if not hasattr(raw, "send_message") or not hasattr(raw, "run_chat_with_tools"):
+    if not isinstance(raw, AIClient):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Configured AI client does not support agent tools.",
+            detail="Configured AI client does not implement the AIClient contract.",
         )
 
-    return cast("SupportsAgentAI", raw)
+    return raw
 
 
 def _get_storage(request: Request) -> CloudStorageClient:
@@ -110,8 +95,15 @@ def _last_processed_timestamps(request: Request) -> dict[str, str]:
     return cast("dict[str, str]", value)
 
 
-def _timestamp_key(raw: str) -> tuple[int, str]:
-    """Sort Slack-style timestamps safely, falling back to string order."""
+def _message_sort_key(msg: Message) -> tuple[int, str]:
+    """Sort messages by time (newest last when using sorted())."""
+    return (1, f"{msg.timestamp.timestamp():020.6f}")
+
+
+def _watermark_key(raw: str | None) -> tuple[int, str]:
+    """Parse stored per-channel watermark for comparison with message keys."""
+    if raw is None:
+        return (0, "")
     try:
         return (1, f"{float(raw):020.6f}")
     except ValueError:
@@ -120,17 +112,17 @@ def _timestamp_key(raw: str) -> tuple[int, str]:
 
 def _select_message_to_process(
     *,
-    messages: list[ChatMessage],
+    messages: list[Message],
     seen_message_ids: set[str],
     last_processed_timestamp: str | None,
-) -> ChatMessage | None:
+) -> Message | None:
     """Choose the newest unseen message after the last processed watermark."""
-    ordered = sorted(messages, key=lambda item: _timestamp_key(item.timestamp))
+    ordered = sorted(messages, key=_message_sort_key)
     eligible = [
         item
         for item in ordered
         if item.message_id not in seen_message_ids
-        and (last_processed_timestamp is None or _timestamp_key(item.timestamp) > _timestamp_key(last_processed_timestamp))
+        and (last_processed_timestamp is None or _message_sort_key(item) > _watermark_key(last_processed_timestamp))
     ]
     if not eligible:
         return None
@@ -142,7 +134,7 @@ def agent_endpoint(
     request: Request,
     body: AgentRequest,
     storage: Annotated[CloudStorageClient, Depends(_get_storage)],
-    ai: Annotated[SupportsAgentAI, Depends(_get_openai_client)],
+    ai: Annotated[AIClient, Depends(_get_openai_client)],
 ) -> AgentResponse:
     """Poll one channel, process the newest unseen message, and post a reply."""
     _require_service_key(request)
@@ -153,7 +145,7 @@ def agent_endpoint(
 
     try:
         messages = get_client().get_messages(body.channel_id, limit=body.limit)
-    except ChatServiceError as exc:
+    except ChatError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     seen_message_ids = _processed_message_ids(request)
@@ -172,13 +164,13 @@ def agent_endpoint(
     reply = run_agent_turn(
         message=selected.text,
         storage=storage,
-        ai=cast("AIClient", ai),
+        ai=ai,
         container=container,
         request_context=ctx,
     )
     try:
         sent_message_id = send_agent_response(body.channel_id, reply)
-    except ChatServiceError as exc:
+    except ChatError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
@@ -186,7 +178,7 @@ def agent_endpoint(
 
     seen_message_ids.add(selected.message_id)
     seen_message_ids.add(sent_message_id)
-    last_processed[body.channel_id] = selected.timestamp
+    last_processed[body.channel_id] = str(selected.timestamp.timestamp())
 
     return AgentResponse(
         status="processed",

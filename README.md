@@ -15,14 +15,15 @@ Repository for Open Source & Professional Software Development CS-GY 9223
 
 # Cloud Storage Client — Component-Based Python Implementation
 
-**Assignment**: HW1 and HW2 — OSPSD CS-GY 9223 (Spring '26)
+**Assignment**: HW1–HW3 — OSPSD CS-GY 9223 (Spring '26)
 
 ## Overview
 
 Component-based cloud storage system with:
 
-- Abstract interface (`vertical_api`)
-- AWS S3 implementation (`vertical_impl`)
+- Shared storage port (**`cloud-storage-api`**) consumed by the service and agent tools
+- Optional HW1-style **`vertical_api`** tree under `src/` for some local examples (not a uv workspace member)
+- AWS S3 implementation (`vertical_impl`) plus GCP and mock providers for demos
 - FastAPI-based cloud storage service
 - Adapter + auto-generated client for remote interaction
 
@@ -51,27 +52,34 @@ Application and demo workflow code depend only on the shared `CloudStorageClient
 
 ## Architecture
 
+The root **`pyproject.toml`** defines a **uv workspace** for the service and adapters. Some dependencies are **not** under `src/`:
+
+- **`chat-client-api`** — shared chat vertical port (`ChatClient`, `Message`, `Channel`, errors, `register_client` / `get_client`), installed from **Git** ([Shared-API](https://github.com/HarshithKoriRaj/Shared-API)); the exact revision is pinned in **`[tool.uv.sources]`**.
+- **`cloud-storage-api`** — shared storage port used by the service and agent tools (git dependency).
+
 ```
 src/
-├── ai_client_api/                    # Abstract base class (AIClient) for AI providers
-├── chat_client_api/                  # Abstract base class (ChatClient) + DI factory for chat providers
-├── chat_client_service_api_client/   # Generated HTTP client for Team 9's chat service (auth, sync/async)
-├── http_chat_client_impl/            # HttpChatClient: implements ChatClient over Team 9's REST API
-├── openai_ai_client_impl/            # OpenAIAIClient: implements AIClient with tool-calling loop
-├── vertical_api/                     # Abstract interface, DI, port exceptions / result types
-├── vertical_impl/                    # AWS S3 + OAuth + token store (registers on import)
-├── vertical_service/                 # FastAPI service — storage, auth, agent (/agent), metrics (/metrics)
-├── vertical_service_api_client/      # Generated OpenAPI HTTP client
-└── vertical_adapter/                 # Client adapter over HTTP; call vertical_adapter.register() for get_client()
+├── ai_client_api/                    # ABC: AIClient; register_ai_client / get_ai_client
+├── chat_client_service_api_client/   # Generated OpenAPI client for Team 9's chat HTTP API
+├── http_chat_client_impl/            # HttpChatClient (Shared ChatClient); factory registration on import
+├── openai_ai_client_impl/            # OpenAIAIClient; registers default AI factory on import
+├── vertical_api/                     # HW1-style port package (under src/; not a uv workspace member)
+├── vertical_impl/                    # S3 + OAuth + token store (workspace package)
+├── vertical_service/                 # FastAPI: storage, auth, /agent, /metrics
+├── vertical_service_api_client/      # Generated client for this service's OpenAPI
+└── vertical_adapter/                 # Remote storage: register() then vertical_api-style get_client()
+
+infra/terraform/                      # Small Terraform scaffold for reviewers; production IaC is in ospsd-team-10-infra
 
 tests/
 ├── integration/
+├── test_http_chat_client_impl_send_message.py
 └── e2e/
 ```
 
 ## Setup
 
-**Prerequisites**: Python 3.12+, uv package manager
+**Prerequisites**: Python **3.12** (project requires `>=3.12,<3.13`), **uv**
 
 ```bash
 # Install dependencies
@@ -172,13 +180,13 @@ uv run pytest tests src -m "not e2e and not team9_chat"   # Unit + integration (
 uv run pytest -m "team9_chat" -v          # Team 9 + stub AI (needs CHAT_* + INTEGRATION_AGENT_CHANNEL_ID)
 uv run pytest tests/e2e/ -m "e2e" -v      # E2E only
 
-# Coverage (threshold: 85%; matches pyproject source layout)
+# Coverage (fail_under=84 in pyproject.toml; see [tool.coverage.report])
 uv run pytest
 ```
 
 ## Testing Strategy
 
-- **Unit tests** (`src/*/tests/`): Mocked dependencies (fast)
+- **Unit tests** (`src/*/tests/` and root **`tests/`**): Mocked dependencies (fast); **`tests/test_http_chat_client_impl_send_message.py`** covers **`HttpChatClient`** send path
 - **Integration tests** (`tests/integration/`): DI wiring; optional live storage service; **Team 9** (`tests/integration/test_agent_team9_integration.py`) when `CHAT_SERVICE_BASE_URL`, `CHAT_SESSION_ID`, and `INTEGRATION_AGENT_CHANNEL_ID` are set (stub AI, mock storage — no OpenAI)
 - **E2E tests** (`tests/e2e/`): Shared flow helper for **S3** (AWS creds) and **remote adapter** (`SERVICE_BASE_URL`, `INTEGRATION_SESSION_TOKEN`, `AWS_S3_BUCKET`)
 
@@ -206,78 +214,65 @@ Artifacts: Coverage reports, test results
 
 ### HW3 — AWS App Runner
 
-**Service URL:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/](https://edbym5kujh.us-east-1.awsapprunner.com)  
+**Service URL:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com](https://i7bgt2fkwq.us-east-1.awsapprunner.com)  
 **API Docs:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs](https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs)  
-**Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://edbym5kujh.us-east-1.awsapprunner.com/metrics)
+**Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics)
 
-Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra).
+Infrastructure is managed in **[ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra)** (Terraform, state, infra CI). This repo also contains a small **`infra/terraform/`** scaffold so reviewers can see expected App Runner resources without duplicating the full production stack.
 
 ## Components
 
-**ai_client_api**:
+**ai_client_api** (workspace):
 
-- `AIClient` ABC defining the minimal contract for AI providers
-- Single abstract method: `send_message(prompt, context)` returns a text reply
-- Zero external dependencies — decouples agent logic from any specific AI provider
+- `AIClient` ABC: `send_message`, `run_chat_with_tools` (tool loop contract)
+- `register_ai_client` / `get_ai_client` — decouples the service from a concrete LLM SDK
 
-**chat_client_api**:
+**chat-client-api** (git / Shared-API):
 
-- `ChatClient` ABC with two abstract methods: `send_message(channel, text)` and `check_health()`
-- DI factory (`register_client`, `get_client`) decouples agent code from any specific chat implementation
-- Allows swapping real and mock clients without changing core agent logic
+- `ChatClient` ABC (full cross-team contract: send/list channels/messages, get/delete where supported)
+- `Message`, `Channel`, typed errors (`ChatError`, `MessageNotFoundError`, …)
+- `register_client(factory: Callable[[], ChatClient])` and `get_client()`
 
-**chat_client_service_api_client**:
+**chat_client_service_api_client** (workspace):
 
-- Generated HTTP client for Team 9's chat service
-- `Client` and `AuthenticatedClient` classes with lazy initialization and context manager support
-- Supports both sync (`httpx.Client`) and async (`httpx.AsyncClient`) requests
-- Immutable configuration via `with_headers` and `with_cookies` helpers
+- Generated HTTP client for Team 9's chat service (sync/async, OpenAPI models)
 
-**http_chat_client_impl**:
+**http_chat_client_impl** (workspace):
 
-- `HttpChatClient` implements `ChatClient` over Team 9's REST API
-- Reads `CHAT_SERVICE_BASE_URL` and `CHAT_SESSION_ID` from environment variables
-- Handles auth errors, validation errors, and network failures gracefully
-- Auto-registers itself as the active chat client on import via `_register_default()`
+- `HttpChatClient` implements Shared `ChatClient` over Team 9's REST API
+- Reads `CHAT_SERVICE_BASE_URL` and `CHAT_SESSION_ID`
+- Registers a **factory** on import (`register_client(...)`); failures surface as `ChatError` (and subclasses where applicable)
 
-**openai_ai_client_impl**:
+**openai_ai_client_impl** (workspace):
 
-- `OpenAIAIClient` implements `AIClient` using OpenAI Chat Completions
-- Single-turn `send_message` with optional context injection into system prompt
-- Multi-turn `run_chat_with_tools` loop — executes tool calls until the model responds with text (up to 8 rounds)
-- Reads `OPENAI_API_KEY` and `OPENAI_MODEL` from environment variables
+- `OpenAIAIClient` implements `AIClient` (OpenAI SDK)
+- Registers the default factory on package import; `vertical_service` uses `get_ai_client()` at startup
+- Reads `OPENAI_API_KEY` and optional `OPENAI_MODEL`
 
-**vertical_api**:
+**vertical_api** (under `src/`, not a uv workspace member):
 
-- `Client` ABC with 4 abstract methods: `upload_object`, `download_object`, `delete_object`, `list_objects`
-- `get_client()` factory for DI
-- Zero external dependencies
+- HW1-style storage port and `get_client()` used in some **local** / course examples (see Usage Examples below)
 
-**vertical_impl**:
+**vertical_impl** (workspace):
 
-- `S3CloudStorageClient` implements `Client`
-- Lazy boto3 init, env-based auth
-- `__init__.py` auto-registers factory on import
-- Deps: `vertical-api`, `boto3>=1.34.0`
+- AWS S3 + OAuth + token store; boto3-backed implementation for the service
 
-**vertical_service**:
+**vertical_service** (workspace):
 
-- FastAPI service exposing storage, auth, agent, and metrics endpoints
-- `/agent` — AI-powered route using `OpenAIAIClient` and tool-calling loop
-- `/metrics` — Prometheus metrics endpoint
-- Includes health check and optional OAuth flow
+- FastAPI app: OAuth, storage routes, **`POST /agent`**, **`GET /metrics`**
+- Prometheus middleware labels include **`status_class`** (`ok`, `domain_error`, `infra_error`) on success, failure, and latency series
+- Agent replies use **`vertical_service.chat_reply.send_agent_response`** → Shared `get_client().send_message(...)`
 
-**vertical_adapter**:
+**vertical_adapter** (workspace):
 
-- Wraps the generated HTTP client as a `Client`; call **`register()`** to use with `get_client()`
-- Maps HTTP failures to `vertical_api` exceptions; returns `UploadResult` / `DeleteResult` at the port boundary
+- Remote **`CloudStorageClient`** over this service's HTTP API; **`register()`** for adapter wiring
 
 ## Configuration (pyproject.toml)
 
 **Ruff**: `select = ["ALL"]` with justified ignores  
 **MyPy**: `strict = true` with AWS SDK overrides  
-**Pytest**: Coverage threshold 85%, test markers (unit/integration/e2e)  
-**Root workspace**: Both components listed as members
+**Pytest**: Coverage **`fail_under = 84`** (`[tool.coverage.report]`), test markers (unit / integration / e2e / `team9_chat`)  
+**Root workspace**: Members listed in `[tool.uv.workspace]`; external packages pinned under `[tool.uv.sources]`
 
 ## Quick Commands
 

@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
 import vertical_service.routes.agent as agent_routes
+from ai_client_api.client import AIClient
+from chat_client_api import (
+    Channel,
+    ChannelNotFoundError,
+    ChatClient,
+    Message,
+    MessageDeleteError,
+    MessageNotFoundError,
+)
 from cloud_storage_api.exceptions import StorageBackendError
 from fastapi.testclient import TestClient
 from openai_ai_client_impl.client import OpenAIAIClient
@@ -21,7 +32,15 @@ from vertical_service.agent import (
 )
 from vertical_service.app import create_app
 
-from chat_client_api import ChatMessage
+
+def _message(*, message_id: str, channel: str, text: str, sender: str, ts: float) -> Message:
+    return Message(
+        message_id=message_id,
+        channel=channel,
+        text=text,
+        sender=sender,
+        timestamp=datetime.fromtimestamp(ts, tz=UTC),
+    )
 
 
 class _FakeMessage:
@@ -61,42 +80,59 @@ class _FakeOpenAI:
         self.chat = _FakeChat(replies)
 
 
-class DummyAIClient:
+class DummyAIClient(AIClient):
     """Local stand-in for the real OpenAI client used by agent tests."""
 
     def __init__(self, replies: list[_FakeMessage] | None = None) -> None:
         """Initialize the dummy AI client."""
         self._client = _FakeOpenAI(replies or [_FakeMessage(content="**Summary:** hello")])
 
-    def send_message(self, prompt: str) -> str:
+    def send_message(self, prompt: str, context: dict[str, Any] | None = None) -> str:
         """Return a deterministic summary string for tests."""
-        _ = prompt
+        _ = (prompt, context)
         return "**Summary:** hello"
 
     def run_chat_with_tools(
         self,
         *,
-        user_message: str,
         system_prompt: str,
+        user_message: str,
         tools: list[dict[str, Any]],
-        handle_tool: object,
+        handle_tool: Callable[[str, dict[str, Any]], str],
+        max_tool_rounds: int = 8,
     ) -> str:
         """Return a deterministic tool-loop response for tests."""
-        _ = (user_message, system_prompt, tools, handle_tool)
+        _ = (user_message, system_prompt, tools, handle_tool, max_tool_rounds)
         return "from-tools"
 
 
-class _StubChatClient:
+class _StubChatClient(ChatClient):
     """Small chat-client stub for polling tests."""
 
-    def __init__(self, messages: list[ChatMessage]) -> None:
+    def __init__(self, messages: list[Message]) -> None:
         """Store fixed messages returned by get_messages."""
         self._messages = messages
 
-    def get_messages(self, _channel: str, *, limit: int = 10, cursor: str | None = None) -> list[ChatMessage]:
+    def send_message(self, channel_id: str, text: str) -> Message:
+        _ = (channel_id, text)
+        raise NotImplementedError
+
+    def get_channels(self) -> list[Channel]:
+        return []
+
+    def get_channel(self, channel_id: str) -> Channel:
+        raise ChannelNotFoundError(channel_id)
+
+    def get_messages(self, channel_id: str, limit: int = 10, cursor: str | None = None) -> list[Message]:
         """Return the configured message list."""
-        _ = (limit, cursor)
+        _ = (channel_id, limit, cursor)
         return self._messages
+
+    def get_message(self, message_id: str) -> Message:
+        raise MessageNotFoundError(message_id)
+
+    def delete_message(self, _message_id: str) -> None:
+        raise MessageDeleteError("stub")
 
 
 class _FakeToolFunction:
@@ -173,12 +209,12 @@ def test_agent_summarize_shortcut_returns_summary(
     app.state.last_processed_chat_timestamps = {}
 
     messages = [
-        ChatMessage(
+        _message(
             message_id="m-1",
             channel="C1",
             text="/summarize report.md",
             sender="aditya",
-            timestamp="100.0",
+            ts=100.0,
         ),
     ]
 
@@ -380,12 +416,12 @@ def test_agent_posts_reply_to_chat_when_channel_present(monkeypatch: pytest.Monk
         return "msg-123"
 
     messages = [
-        ChatMessage(
+        _message(
             message_id="m-1",
             channel="C123",
             text="hello",
             sender="aditya",
-            timestamp="100.0",
+            ts=100.0,
         ),
     ]
 
@@ -413,12 +449,12 @@ def test_agent_returns_idle_when_no_new_messages(monkeypatch: pytest.MonkeyPatch
     app.state.last_processed_chat_timestamps = {"C123": "100.0"}
 
     messages = [
-        ChatMessage(
+        _message(
             message_id="m-1",
             channel="C123",
             text="hello",
             sender="aditya",
-            timestamp="100.0",
+            ts=100.0,
         ),
     ]
 

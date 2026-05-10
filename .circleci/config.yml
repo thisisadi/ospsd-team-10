@@ -159,7 +159,7 @@ jobs:
           name: Run Team 9 + agent integration test when chat env vars exist
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src:$(pwd)/src/http_chat_client_impl/src:$(pwd)/src/chat_client_api/src:$(pwd)/src/chat_client_service_api_client/src:$(pwd)/src/ai_client_api/src:$(pwd)/src/openai_ai_client_impl/src
+            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src:$(pwd)/src/http_chat_client_impl/src:$(pwd)/src/chat_client_service_api_client/src:$(pwd)/src/ai_client_api/src:$(pwd)/src/openai_ai_client_impl/src
             if [ -n "${CHAT_SERVICE_BASE_URL}" ] && [ -n "${CHAT_SESSION_ID}" ] && [ -n "${INTEGRATION_AGENT_CHANNEL_ID}" ]; then
               echo "Team 9 chat env vars detected. Running team9_chat integration test..."
               uv run pytest -m "team9_chat" \

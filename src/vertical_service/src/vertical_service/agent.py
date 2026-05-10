@@ -8,28 +8,12 @@ from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, cast
 
+from ai_client_api.client import AIClient
 from cloud_storage_api import CloudStorageClient
 from cloud_storage_api.exceptions import StorageBackendError
 from cloud_storage_api.models import ObjectInfo
-
-
-class AIClient(Protocol):
-    """Minimal interface required from the AI client."""
-
-    def send_message(self, prompt: str) -> str:
-        """Return a text response for a plain prompt."""
-
-    def run_chat_with_tools(
-        self,
-        *,
-        system_prompt: str,
-        user_message: str,
-        tools: list[dict[str, Any]],
-        handle_tool: Callable[[str, dict[str, Any]], str],
-    ) -> str:
-        """Run a tool-enabled chat turn and return the final response."""
 
 
 def _object_info_payload(info: ObjectInfo) -> dict[str, Any]:

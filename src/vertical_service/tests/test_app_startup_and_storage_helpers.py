@@ -1,6 +1,7 @@
 # ruff: noqa: SLF001
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import pytest
@@ -39,11 +40,11 @@ def test_setup_startup_sets_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_create_storage_client() -> object:
         return fake_storage
 
-    def _fake_openai_client(api_key: str) -> dict[str, str]:
-        return {"api_key": api_key}
+    def _fake_get_ai_client() -> dict[str, str]:
+        return {"api_key": os.environ["OPENAI_API_KEY"]}
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
+    monkeypatch.setattr("vertical_service.app.get_ai_client", _fake_get_ai_client)
     startup = app.router.on_startup[0]
     startup()
     assert app.state.storage_client is fake_storage
@@ -57,11 +58,11 @@ def test_metrics_middleware_failure_path(monkeypatch: pytest.MonkeyPatch) -> Non
     def _fake_create_storage_client() -> object:
         return object()
 
-    def _fake_openai_client(api_key: str) -> dict[str, str]:
-        return {"api_key": api_key}
+    def _fake_get_ai_client() -> dict[str, str]:
+        return {"api_key": os.environ["OPENAI_API_KEY"]}
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
+    monkeypatch.setattr("vertical_service.app.get_ai_client", _fake_get_ai_client)
     app = app_mod.create_app()
     app.dependency_overrides[require_oauth_session] = lambda: "session"
 
@@ -132,11 +133,11 @@ def test_storage_delete_and_info_exception_mapping(monkeypatch: pytest.MonkeyPat
     def _fake_create_storage_client() -> _FailingStorage:
         return failing_storage
 
-    def _fake_openai_client(api_key: str) -> dict[str, str]:
-        return {"api_key": api_key}
+    def _fake_get_ai_client() -> dict[str, str]:
+        return {"api_key": os.environ["OPENAI_API_KEY"]}
 
     monkeypatch.setattr("vertical_service.app.create_storage_client", _fake_create_storage_client)
-    monkeypatch.setattr("vertical_service.app.OpenAIAIClient", _fake_openai_client)
+    monkeypatch.setattr("vertical_service.app.get_ai_client", _fake_get_ai_client)
     app = app_mod.create_app()
     app.dependency_overrides[require_oauth_session] = lambda: "session"
     app.state.storage_client = failing_storage

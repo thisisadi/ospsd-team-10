@@ -5,8 +5,8 @@ import os
 import time
 from collections.abc import Awaitable, Callable
 
+from ai_client_api.client import get_ai_client
 from fastapi import FastAPI, Request, Response
-from openai_ai_client_impl.client import OpenAIAIClient
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -17,12 +17,23 @@ from prometheus_client import (
 from starlette.middleware.sessions import SessionMiddleware
 
 import http_chat_client_impl  # noqa: F401
+import openai_ai_client_impl  # noqa: F401
 from vertical_service.config import session_secret_key
 from vertical_service.provider_switching.factory import create_storage_client
 from vertical_service.routes import agent, auth, health, storage
 
 logger = logging.getLogger(__name__)
 HTTP_BAD_REQUEST = 400
+HTTP_INTERNAL_ERROR = 500
+
+
+def _status_class(status_code: int) -> str:
+    """Map HTTP status to Prometheus ``status_class`` label."""
+    if status_code < HTTP_BAD_REQUEST:
+        return "ok"
+    if status_code < HTTP_INTERNAL_ERROR:
+        return "domain_error"
+    return "infra_error"
 
 
 # ---- Metrics setup ----
@@ -40,21 +51,21 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
     success_count = Counter(
         "vertical_service_success_total",
         "Total successful HTTP requests.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status_class"],
         registry=registry,
     )
 
     failure_count = Counter(
         "vertical_service_failure_total",
         "Total failed HTTP requests.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status_class"],
         registry=registry,
     )
 
     request_latency = Histogram(
         "vertical_service_request_latency_seconds",
         "HTTP request latency in seconds.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status_class"],
         registry=registry,
     )
 
@@ -72,18 +83,22 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
             status_code = response.status_code
         except Exception:
             request_count.labels(endpoint=endpoint, method=method).inc()
-            failure_count.labels(endpoint=endpoint, method=method).inc()
-            request_latency.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start)
+            failure_count.labels(endpoint=endpoint, method=method, status_class="infra_error").inc()
+            request_latency.labels(endpoint=endpoint, method=method, status_class="infra_error").observe(
+                time.perf_counter() - start,
+            )
             raise
 
         request_count.labels(endpoint=endpoint, method=method).inc()
 
-        if status_code < HTTP_BAD_REQUEST:
-            success_count.labels(endpoint=endpoint, method=method).inc()
-        else:
-            failure_count.labels(endpoint=endpoint, method=method).inc()
+        sc = _status_class(status_code)
+        request_latency.labels(endpoint=endpoint, method=method, status_class=sc).observe(time.perf_counter() - start)
 
-        request_latency.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start)
+        if status_code < HTTP_BAD_REQUEST:
+            success_count.labels(endpoint=endpoint, method=method, status_class="ok").inc()
+        else:
+            failure_sc = "domain_error" if status_code < HTTP_INTERNAL_ERROR else "infra_error"
+            failure_count.labels(endpoint=endpoint, method=method, status_class=failure_sc).inc()
 
         return response
 
@@ -104,12 +119,11 @@ def setup_startup(app: FastAPI) -> None:
 
         app.state.storage_client = create_storage_client()
 
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
+        if not os.environ.get("OPENAI_API_KEY"):
             msg = "Missing OPENAI_API_KEY"
             raise RuntimeError(msg)
 
-        app.state.ai_client = OpenAIAIClient(api_key=api_key)
+        app.state.ai_client = get_ai_client()
 
         logger.info("Application state initialized")
 

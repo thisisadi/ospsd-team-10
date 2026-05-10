@@ -48,7 +48,7 @@ uv run ruff format --check .
 - [ ] Security / secrets handled correctly (no hardcoded credentials)
 - [ ] Performance impact acceptable
 - [ ] Docs updated for user-facing changes
-- [ ] Coverage threshold (85%) maintained
+- [ ] Coverage threshold from root `pyproject.toml` (`[tool.coverage.report]` `fail_under`) maintained in CI
 
 ## Breaking Changes (skip if none)
 1. Impact:
