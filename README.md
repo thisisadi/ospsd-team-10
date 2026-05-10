@@ -9,6 +9,8 @@ Repository for Open Source & Professional Software Development CS-GY 9223
 - Gurjeet Kaur (gk2845)
 - Chloe Lee (hl6181)
 
+**Related Repositories:** [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra) — Terraform infrastructure and infra CI/CD pipeline for AWS App Runner deployment
+
 ---
 
 # Cloud Storage Client — Component-Based Python Implementation
@@ -28,33 +30,39 @@ Supports both **local (direct S3)** and **remote (service via HTTP)** usage.
 
 Includes strict static analysis (ruff, mypy) and comprehensive testing (unit, integration, E2E).
 
+## HW3 Provider Switching Demo
+
+The storage provider is selected by configuration through `STORAGE_PROVIDER`:
+
+- `STORAGE_PROVIDER=s3` uses the existing `S3CloudStorageClient` implementation.
+- `STORAGE_PROVIDER=gcp` uses `GCPCloudStorageClient` (Google Cloud Storage).
+- `STORAGE_PROVIDER=mock` uses an in-memory mock implementation for local demo/testing.
+- If `STORAGE_PROVIDER` is unset, the service defaults to `s3` to preserve existing teammate workflows.
+- GCP configuration uses `GCP_PROJECT_ID` plus either `GCP_CREDENTIALS_PATH` or `GOOGLE_APPLICATION_CREDENTIALS`.
+- For GCP workflows, pass the bucket as the normal `container` argument; optional test helpers can use `GCP_BUCKET_NAME` (or `GCP_BUCKET`).
+
+Application and demo workflow code depend only on the shared `CloudStorageClient` interface (`cloud-storage-api` v1.0.0), not provider-specific logic. The same upload/list/info/download/delete workflow can run against S3, GCP, or mock, demonstrating provider swapping for the HW3 video requirement.
+
 ## Documentation
 
 - **[docs/DESIGN.md](docs/DESIGN.md)** — design document (architecture, API decisions, HW2 extension)
 - **MkDocs site** — run `uv run mkdocs serve`; the **Design** page is `docs/DESIGN.md`
 - **Live site (GitHub Pages)** — [https://thisisadi.github.io/ospsd-team-10/](https://thisisadi.github.io/ospsd-team-10/)
 
-### Enable GitHub Pages (required once)
-
-If that link shows *“There isn’t a GitHub Pages site here”*, the site files are on the `gh-pages` branch but **Pages is not turned on** for the repo. A maintainer must:
-
-1. Open the repo on GitHub → **Settings** → **Pages**.
-2. Under **Build and deployment**, set **Source** to **Deploy from a branch** (not “GitHub Actions” for this project).
-3. Choose **Branch:** `gh-pages`, **Folder:** `/` (root), then **Save**.
-
-After a minute, refresh the live URL. The **Deploy documentation** workflow (`.github/workflows/docs.yml`) updates `gh-pages` on pushes to `main` or `hw-2`; you can also run it manually under **Actions** → **Deploy documentation** → **Run workflow**.
-
-That workflow file is on **`hw-2`** (not yet on `main`); merge `hw-2` into `main` if you want the same automation on the default branch.
-
 ## Architecture
 
 ```
 src/
-├── vertical_api/                 # Abstract interface, DI, port exceptions / result types
-├── vertical_impl/                # AWS S3 + OAuth + token store (registers on import)
-├── vertical_service/             # FastAPI service (imports vertical_impl only)
-├── vertical_service_api_client/  # Generated OpenAPI HTTP client
-└── vertical_adapter/             # Client adapter over HTTP; call vertical_adapter.register() for get_client()
+├── ai_client_api/                    # Abstract base class (AIClient) for AI providers
+├── chat_client_api/                  # Abstract base class (ChatClient) + DI factory for chat providers
+├── chat_client_service_api_client/   # Generated HTTP client for Team 9's chat service (auth, sync/async)
+├── http_chat_client_impl/            # HttpChatClient: implements ChatClient over Team 9's REST API
+├── openai_ai_client_impl/            # OpenAIAIClient: implements AIClient with tool-calling loop
+├── vertical_api/                     # Abstract interface, DI, port exceptions / result types
+├── vertical_impl/                    # AWS S3 + OAuth + token store (registers on import)
+├── vertical_service/                 # FastAPI service — storage, auth, agent (/agent), metrics (/metrics)
+├── vertical_service_api_client/      # Generated OpenAPI HTTP client
+└── vertical_adapter/                 # Client adapter over HTTP; call vertical_adapter.register() for get_client()
 
 tests/
 ├── integration/
@@ -63,11 +71,11 @@ tests/
 
 ## Setup
 
-**Prerequisites**: Python 3.11+, uv package manager
+**Prerequisites**: Python 3.12+, uv package manager
 
 ```bash
 # Install dependencies
-uv venv --python 3.11
+uv venv --python 3.12
 source .venv/bin/activate
 uv sync --all-packages --group dev
 ```
@@ -140,6 +148,14 @@ export AWS_SECRET_ACCESS_KEY="xxx"
 
 In CircleCI: Add these as project environment variables.
 
+**Team 9 + `/agent` integration (CI):** To run the live chat integration test on every pipeline, add project environment variables:
+
+- `CHAT_SERVICE_BASE_URL` — Team 9 chat API base URL (same as production usage).
+- `CHAT_SESSION_ID` — Session id sent as `X-Session-ID` (list + post messages).
+- `INTEGRATION_AGENT_CHANNEL_ID` — A dedicated channel id for automation (tests post a unique probe message and the agent reply there).
+
+Optional: `AGENT_API_KEY` — if set, the test sends matching `X-API-Key` on `POST /agent` (same as your deployed service).
+
 ## Running Tools
 
 ```bash
@@ -152,7 +168,8 @@ uv run mypy .
 
 # Tests
 uv run pytest                             # All tests
-uv run pytest tests src -m "not e2e"       # Unit + integration
+uv run pytest tests src -m "not e2e and not team9_chat"   # Unit + integration (excludes live Team 9)
+uv run pytest -m "team9_chat" -v          # Team 9 + stub AI (needs CHAT_* + INTEGRATION_AGENT_CHANNEL_ID)
 uv run pytest tests/e2e/ -m "e2e" -v      # E2E only
 
 # Coverage (threshold: 85%; matches pyproject source layout)
@@ -162,37 +179,73 @@ uv run pytest
 ## Testing Strategy
 
 - **Unit tests** (`src/*/tests/`): Mocked dependencies (fast)
-- **Integration tests** (`tests/integration/`): DI wiring; optional live service when env vars are set
+- **Integration tests** (`tests/integration/`): DI wiring; optional live storage service; **Team 9** (`tests/integration/test_agent_team9_integration.py`) when `CHAT_SERVICE_BASE_URL`, `CHAT_SESSION_ID`, and `INTEGRATION_AGENT_CHANNEL_ID` are set (stub AI, mock storage — no OpenAI)
 - **E2E tests** (`tests/e2e/`): Shared flow helper for **S3** (AWS creds) and **remote adapter** (`SERVICE_BASE_URL`, `INTEGRATION_SESSION_TOKEN`, `AWS_S3_BUCKET`)
 
 ## CI/CD
 
 CircleCI pipeline (`.circleci/config.yml`):
 
-1. **build**: Install deps, verify versions
+1. **build**: Install deps, verify versions, build and push Docker image to ECR
 2. **lint**: ruff check + format
 3. **typecheck**: mypy strict
-4. **test_unit_integration**: Unit + integration tests, coverage report
-5. **test_e2e_optional**: E2E tests (if AWS credentials present)
-6. **deploy_render_hook** (optional): If `RENDER_DEPLOY_HOOK_URL` is set in CircleCI project env, triggers a Render deploy hook after tests
+4. **test_unit_integration**: Unit + integration tests, coverage report (excludes `team9_chat` marks)
+5. **test_team9_chat_optional**: Live Team 9 poll + reply + in-process `/agent` with stub AI (if `CHAT_*` and `INTEGRATION_AGENT_CHANNEL_ID` are set)
+6. **test_e2e_optional**: E2E tests (if AWS credentials present)
+7. **deploy_render_hook** (optional): If `RENDER_DEPLOY_HOOK_URL` is set in CircleCI project env, triggers a Render deploy hook after tests
 
 Artifacts: Coverage reports, test results
 
-## Deployment (HW2)
+## Deployment
 
-**Platform:**  
-Deployed using [Render](https://render.com).
+### HW2 — Render
 
-**Service URL:**  
-[https://team10-cloud-service.onrender.com](https://team10-cloud-service.onrender.com)
+**Service URL:** [https://team10-cloud-service.onrender.com](https://team10-cloud-service.onrender.com)  
+**API Docs:** [https://team10-cloud-service.onrender.com/docs](https://team10-cloud-service.onrender.com/docs)  
+**OpenAPI Schema:** [https://team10-cloud-service.onrender.com/openapi.json](https://team10-cloud-service.onrender.com/openapi.json)
 
-**API Documentation:**  
-[https://team10-cloud-service.onrender.com/docs](https://team10-cloud-service.onrender.com/docs)
+### HW3 — AWS App Runner
 
-**OpenAPI Schema:**  
-[https://team10-cloud-service.onrender.com/openapi.json](https://team10-cloud-service.onrender.com/openapi.json)
+**Service URL:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com](https://i7bgt2fkwq.us-east-1.awsapprunner.com)  
+**API Docs:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs](https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs)  
+**Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics)
+
+Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra).
 
 ## Components
+
+**ai_client_api**:
+
+- `AIClient` ABC defining the minimal contract for AI providers
+- Single abstract method: `send_message(prompt, context)` returns a text reply
+- Zero external dependencies — decouples agent logic from any specific AI provider
+
+**chat_client_api**:
+
+- `ChatClient` ABC with two abstract methods: `send_message(channel, text)` and `check_health()`
+- DI factory (`register_client`, `get_client`) decouples agent code from any specific chat implementation
+- Allows swapping real and mock clients without changing core agent logic
+
+**chat_client_service_api_client**:
+
+- Generated HTTP client for Team 9's chat service
+- `Client` and `AuthenticatedClient` classes with lazy initialization and context manager support
+- Supports both sync (`httpx.Client`) and async (`httpx.AsyncClient`) requests
+- Immutable configuration via `with_headers` and `with_cookies` helpers
+
+**http_chat_client_impl**:
+
+- `HttpChatClient` implements `ChatClient` over Team 9's REST API
+- Reads `CHAT_SERVICE_BASE_URL` and `CHAT_SESSION_ID` from environment variables
+- Handles auth errors, validation errors, and network failures gracefully
+- Auto-registers itself as the active chat client on import via `_register_default()`
+
+**openai_ai_client_impl**:
+
+- `OpenAIAIClient` implements `AIClient` using OpenAI Chat Completions
+- Single-turn `send_message` with optional context injection into system prompt
+- Multi-turn `run_chat_with_tools` loop — executes tool calls until the model responds with text (up to 8 rounds)
+- Reads `OPENAI_API_KEY` and `OPENAI_MODEL` from environment variables
 
 **vertical_api**:
 
@@ -209,7 +262,9 @@ Deployed using [Render](https://render.com).
 
 **vertical_service**:
 
-- FastAPI service exposing storage endpoints
+- FastAPI service exposing storage, auth, agent, and metrics endpoints
+- `/agent` — AI-powered route using `OpenAIAIClient` and tool-calling loop
+- `/metrics` — Prometheus metrics endpoint
 - Includes health check and optional OAuth flow
 
 **vertical_adapter**:
@@ -226,14 +281,14 @@ Deployed using [Render](https://render.com).
 
 ## Quick Commands
 
-| Task     | Command                                            |
-| -------- | -------------------------------------------------- |
-| Install  | `uv sync --all-packages --group dev`               |
-| Lint     | `uv run ruff check . && ruff format .`             |
-| Type     | `uv run mypy .`                                    |
-| Test     | `uv run pytest`                                    |
-| Coverage | `uv run pytest` (threshold in `pyproject.toml`)    |
+| Task     | Command                                         |
+| -------- | ----------------------------------------------- |
+| Install  | `uv sync --all-packages --group dev`            |
+| Lint     | `uv run ruff check . && ruff format .`          |
+| Type     | `uv run mypy .`                                 |
+| Test     | `uv run pytest`                                 |
+| Coverage | `uv run pytest` (threshold in `pyproject.toml`) |
 
 ---
 
-**Last Updated**: Mar 2026
+**Last Updated**: May 2026

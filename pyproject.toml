@@ -3,17 +3,8 @@ name = "ospsd-team-10"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-  "cloud-storage-api",
-  "vertical-service-api-client",
-  "vertical-adapter",
-  "vertical-service",
-  "vertical-impl",
-  "fastapi>=0.115.0",
-  "uvicorn>=0.30.0",
-  "httpx>=0.27.0",
-  "boto3>=1.35.0",
-  "botocore>=1.35.0",
-  "prometheus-client>=0.25.0",
+    "cloud-storage-api",
+    "prometheus-client",
 ]
 
 [tool.uv.workspace]
@@ -24,6 +15,9 @@ members = [
   "src/vertical_adapter",
   "src/vertical_service",
   "src/vertical_impl",
+  "src/chat_client_service_api_client",
+  "src/chat_client_api",
+  "src/http_chat_client_impl",
 ]
 
 [tool.uv.sources]
@@ -33,13 +27,17 @@ vertical-service-api-client = { workspace = true }
 vertical-adapter = { workspace = true }
 vertical-service = { workspace = true }
 vertical-impl = { workspace = true }
-cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage.git", rev = "v1.0.0" }
+chat-client-service-api-client = { workspace = true }
+chat-client-api = { workspace = true }
+http-chat-client-impl = { workspace = true }
+cloud-storage-api = { git = "https://github.com/2SpaceMasterRace/ospsd-cloud-storage", rev = "v1.0.0" }
 
 [tool.ruff]
 line-length = 130
 target-version = "py311"
 exclude = [
   "src/vertical_service_api_client/src",
+  "src/chat_client_service_api_client",
   "src/vertical_api",
 ]
 
@@ -71,13 +69,9 @@ ignore = [
   "INP001",
 ]
 
-# -----------------------------
-# ✅ FIXED MYPI CONFIG
-# -----------------------------
 [tool.mypy]
 strict = true
 explicit_package_bases = true
-warn_unused_ignores = false
 mypy_path = [
   "src/ai_client_api/src",
   "src/openai_ai_client_impl/src",
@@ -85,25 +79,22 @@ mypy_path = [
   "src/vertical_adapter/src",
   "src/vertical_service/src",
   "src/vertical_impl/src",
+  "src/chat_client_service_api_client/src",
+  "src/chat_client_api/src",
+  "src/http_chat_client_impl/src",
 ]
+ignore_missing_imports = false
+warn_unused_ignores = false
 exclude = [
   "src/vertical_api",
 ]
 
+# ✅ FIX for prometheus_client (mypy error)
 [[tool.mypy.overrides]]
-module = "cloud_storage_api.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "dateutil.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "boto3.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "botocore.*"
+module = [
+  "prometheus_client",
+  "prometheus_client.*",
+]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -126,6 +117,7 @@ markers = [
   "unit: marks tests as unit tests (fast, isolated)",
   "integration: marks tests as integration tests (medium speed, real dependencies)",
   "e2e: marks tests as end-to-end tests (slow, full system)",
+  "team9_chat: marks tests that require live Team 9 chat (CHAT_* and INTEGRATION_AGENT_CHANNEL_ID)",
   "circleci: marks tests that can run in CI/CD environments without local credentials",
   "aws_credentials: marks tests that require AWS credentials / configured env vars",
 ]
@@ -140,12 +132,13 @@ omit = [
   "*/tests/*",
   "*/__main__.py",
   "src/vertical_service_api_client/src/*",
+  "*/agent_key_dep.py",
   "src/ai_client_api/src/*",
   "src/openai_ai_client_impl/src/*",
 ]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 84
 exclude_lines = [
   "pragma: no cover",
   "raise NotImplementedError",

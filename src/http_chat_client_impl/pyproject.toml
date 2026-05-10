@@ -1,0 +1,26 @@
+[project]
+name = "http-chat-client-impl"
+version = "0.1.0"
+description = "HTTP implementation of the chat client port (Team 9 chat service client)."
+requires-python = ">=3.12"
+dependencies = [
+  "chat-client-api",
+  "chat-client-service-api-client",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+chat-client-api = { workspace = true }
+chat-client-service-api-client = { workspace = true }

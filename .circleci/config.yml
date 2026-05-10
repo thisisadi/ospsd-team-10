@@ -7,6 +7,8 @@ jobs:
     working_directory: ~/project
     steps:
       - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
 
       - run:
           name: Install uv and add to PATH
@@ -33,6 +35,43 @@ jobs:
             uv run mypy --version
             uv run pytest --version
             uv run coverage --version
+
+      - run:
+          name: Install AWS CLI
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+
+      - run:
+          name: Login to ECR
+          command: |
+            aws ecr get-login-password --region $AWS_REGION \
+            | docker login \
+              --username AWS \
+              --password-stdin 396608794887.dkr.ecr.us-east-1.amazonaws.com
+
+      - run:
+          name: Build image
+          command: docker build -t ospsd-cloud-service .
+
+      - run:
+          name: Tag image
+          command: |
+            docker tag ospsd-cloud-service:latest \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:latest
+
+            docker tag ospsd-cloud-service:latest \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:$CIRCLE_SHA1
+
+      - run:
+          name: Push image
+          command: |
+            docker push \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:latest
+
+            docker push \
+            396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:$CIRCLE_SHA1
 
       - persist_to_workspace:
           root: .
@@ -84,7 +123,7 @@ jobs:
           command: |
             source .venv/bin/activate
             export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
-            uv run pytest -m "not e2e" \
+            uv run pytest -m "not e2e and not team9_chat" \
               --junitxml=test-results/unit_integration/junit.xml -v \
               --cov=vertical_adapter \
               --cov=vertical_service \
@@ -103,6 +142,39 @@ jobs:
       - store_artifacts:
           path: test-results/unit_integration
           destination: test-results/unit_integration
+
+  test_team9_chat_optional:
+    docker:
+      - image: cimg/python:3.12
+    working_directory: ~/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Create results directory
+          command: |
+            mkdir -p test-results/team9_chat
+
+      - run:
+          name: Run Team 9 + agent integration test when chat env vars exist
+          command: |
+            source .venv/bin/activate
+            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src:$(pwd)/src/http_chat_client_impl/src:$(pwd)/src/chat_client_api/src:$(pwd)/src/chat_client_service_api_client/src:$(pwd)/src/ai_client_api/src:$(pwd)/src/openai_ai_client_impl/src
+            if [ -n "${CHAT_SERVICE_BASE_URL}" ] && [ -n "${CHAT_SESSION_ID}" ] && [ -n "${INTEGRATION_AGENT_CHANNEL_ID}" ]; then
+              echo "Team 9 chat env vars detected. Running team9_chat integration test..."
+              uv run pytest -m "team9_chat" \
+                --junitxml=test-results/team9_chat/junit.xml -v \
+                --no-cov
+            else
+              echo "Team 9 chat env vars not set (CHAT_SERVICE_BASE_URL, CHAT_SESSION_ID, INTEGRATION_AGENT_CHANNEL_ID). Skipping."
+            fi
+
+      - store_test_results:
+          path: test-results/team9_chat
+
+      - store_artifacts:
+          path: test-results/team9_chat
+          destination: test-results/team9_chat
 
   test_e2e_optional:
     docker:
@@ -193,6 +265,8 @@ workflows:
           requires: [build]
       - test_unit_integration:
           requires: [build]
+      - test_team9_chat_optional:
+          requires: [test_unit_integration]
       - test_e2e_optional:
           requires: [test_unit_integration]
       - deploy_render_hook:
