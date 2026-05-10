@@ -10,9 +10,11 @@ from chat_client_api.client import (
     register_client_factory,
 )
 from chat_client_api.exceptions import ChatServiceAuthError, ChatServiceError
+from chat_client_api.message import ChatMessage
 
 __all__ = (
     "ChatClient",
+    "ChatMessage",
     "ChatServiceAuthError",
     "ChatServiceError",
     "get_client",
