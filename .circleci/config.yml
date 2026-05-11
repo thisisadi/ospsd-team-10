@@ -159,27 +159,33 @@ jobs:
       - run:
           name: Create results directory
           command: |
-            mkdir -p test-results/team9_chat
+            mkdir -p test-results/team9
 
       - run:
           name: Run Team 9 + agent integration test when chat env vars exist
           command: |
             source .venv/bin/activate
-            if [ -n "${CHAT_SERVICE_BASE_URL}" ] && [ -n "${CHAT_SESSION_ID}" ] && [ -n "${INTEGRATION_AGENT_CHANNEL_ID}" ]; then
-              echo "Team 9 chat env vars detected. Running team9_chat integration test..."
-              uv run pytest -m "team9_chat" \
-                --junitxml=test-results/team9_chat/junit.xml -v \
-                --no-cov
-            else
-              echo "Team 9 chat env vars not set (CHAT_SERVICE_BASE_URL, CHAT_SESSION_ID, INTEGRATION_AGENT_CHANNEL_ID). Skipping."
+            if [ -z "${CHAT_SERVICE_BASE_URL:-}" ] || [ -z "${CHAT_SESSION_ID:-}" ] || [ -z "${INTEGRATION_AGENT_CHANNEL_ID:-}" ]; then
+              echo "Skipping optional Team 9 chat integration test: required env vars are not configured."
+              printf '%s\n' \
+                '<?xml version="1.0" encoding="utf-8"?>' \
+                '<testsuites>' \
+                '  <testsuite name="team9_chat_optional" tests="0" failures="0" errors="0" skipped="0" />' \
+                '</testsuites>' \
+                > test-results/team9/results.xml
+              exit 0
             fi
+            echo "Team 9 chat env vars detected. Running optional team9_chat integration test..."
+            uv run pytest tests/integration/test_agent_team9_integration.py -v \
+              --junitxml=test-results/team9/results.xml \
+              --no-cov
 
       - store_test_results:
-          path: test-results/team9_chat
+          path: test-results/team9
 
       - store_artifacts:
-          path: test-results/team9_chat
-          destination: test-results/team9_chat
+          path: test-results/team9
+          destination: test-results/team9
 
   test_e2e_optional:
     docker:

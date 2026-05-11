@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, Annotated, Any, cast
@@ -38,8 +39,8 @@ _EXCEPTION_STATUS_MAP: dict[type[BaseException], int] = {
     ObjectNotFoundError: status.HTTP_404_NOT_FOUND,
     AuthenticationError: status.HTTP_401_UNAUTHORIZED,
     ContainerNotFoundError: status.HTTP_404_NOT_FOUND,
-    InvalidContainerError: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    InvalidObjectNameError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    InvalidContainerError: HTTPStatus.UNPROCESSABLE_ENTITY,
+    InvalidObjectNameError: HTTPStatus.UNPROCESSABLE_ENTITY,
     LocalFileAccessError: status.HTTP_500_INTERNAL_SERVER_ERROR,
     StorageBackendError: status.HTTP_502_BAD_GATEWAY,
 }

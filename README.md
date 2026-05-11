@@ -242,6 +242,19 @@ The deployed service exposes:
 
 Telemetry dashboard: CloudWatch dashboard `ospsd-team-10`. If reviewer access is unavailable, demo `/metrics` with `curl` and show the App Runner CloudWatch metrics for request latency, 2xx, 4xx, and 5xx responses.
 
+### Telemetry Demo Commands
+
+```bash
+curl -i https://i7bgt2fkwq.us-east-1.awsapprunner.com/health
+curl -s https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics | grep vertical_service
+```
+
+Expected metrics include:
+
+- `vertical_service_request_latency_seconds` with `endpoint`, `method`, and `status` labels.
+- `vertical_service_success_total` for 2xx/3xx responses.
+- `vertical_service_failure_total` with `failure_kind="domain"` for 4xx and `failure_kind="infrastructure"` for 5xx.
+
 ## HW3 CI/CD Summary
 
 CircleCI runs on feature branches and PRs, including `hw-3` and `gurjeet-hw3-new`:
@@ -269,6 +282,47 @@ Suggested PR summary:
 - Wires Team 9 chat through a shared chat client API and HTTP adapter.
 - Adds provider switching, Prometheus metrics, App Runner deployment documentation, and CI checks.
 - Maintains strict Ruff, strict mypy, and coverage-enforced pytest.
+
+Suggested PR body:
+
+```markdown
+## Summary
+- Adds the HW3 AI storage agent with typed tool schemas and OpenAI function-calling.
+- Integrates Team 9 chat through a shared `chat_client_api` port and HTTP adapter.
+- Adds provider switching, Prometheus metrics, Terraform/App Runner deployment scaffolding, and CI artifact uploads.
+- Keeps strict Ruff, strict mypy, and coverage-enforced pytest green.
+
+## Validation
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy .`
+- `uv run pytest -v`
+- `uv run pytest --cov`
+
+## Deployment / Observability
+- `/health`: https://i7bgt2fkwq.us-east-1.awsapprunner.com/health
+- `/metrics`: https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics
+- Terraform scaffold: `infra/terraform/`
+
+## Security
+- No secrets are committed. Runtime credentials are env vars or deployment secrets.
+```
+
+## Estimated HW3 Rubric Coverage
+
+| Area | Status |
+| --- | --- |
+| Repository/process | Complete: `src/` layout, templates, no top-level app modules. |
+| Tooling/config | Complete: uv workspace, strict Ruff, strict mypy, coverage threshold. |
+| Shared vertical API | Complete: dedicated ABC files and shared `cloud-storage-api` adaptation documented. |
+| AI client | Complete plus extra credit: provider-neutral ABC, OpenAI impl, typed Pydantic tool schemas, retry tests. |
+| Cross-vertical integration | Complete plus extra credit: Team 9 chat port/adapter, DI, retry tests, integration coverage. |
+| IaC/deployment | Strong: shared infra repo plus local Terraform scaffold and App Runner URL. |
+| Observability | Strong: `/metrics`, latency, success/failure, status labels, 4xx/5xx distinction. |
+| Testing | Strong: unit, integration, e2e, mocked SDK/network paths, 88%+ coverage. |
+| CI/CD | Strong: required checks, artifacts, gated publish/deploy stages. |
+| Documentation/demo | Strong: README, DESIGN, VIDEO_DEMO, PR and peer-review sections. |
 
 ## Peer Review Notes
 

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from vertical_service.app import create_app
 from vertical_service.routes.agent import _get_openai_client
 
-from chat_client_api import get_client
+from chat_client_api import ChatServiceError, get_client
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -36,6 +36,18 @@ _ENV_NAMES = (
 
 def _team9_env_ready() -> bool:
     return all(os.getenv(name, "").strip() for name in _ENV_NAMES)
+
+
+def _strict_live_mode() -> bool:
+    """Return true when live Team 9 failures should fail CI instead of xfail."""
+    return os.getenv("TEAM9_CHAT_STRICT_LIVE", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _xfail_optional_team9(reason: str) -> None:
+    """Mark optional Team 9 service failures as expected unless strict live mode is enabled."""
+    if _strict_live_mode():
+        pytest.fail(reason)
+    pytest.xfail(reason)
 
 
 class _StubAIClient:
@@ -91,7 +103,10 @@ def test_agent_turn_hits_team9_poll_and_reply(agent_app: tuple[FastAPI, str]) ->
     app, channel = agent_app
     probe = f"integration-probe-{uuid.uuid4()}"
 
-    get_client().send_message(channel, probe)
+    try:
+        get_client().send_message(channel, probe)
+    except ChatServiceError as exc:
+        _xfail_optional_team9(f"Optional Team 9 chat service unavailable or rejected the session: {exc}")
 
     headers: dict[str, str] = {}
     agent_key = os.environ.get("AGENT_API_KEY", "").strip()
@@ -109,6 +124,8 @@ def test_agent_turn_hits_team9_poll_and_reply(agent_app: tuple[FastAPI, str]) ->
             headers=headers,
         )
 
+    if response.status_code == 502:
+        _xfail_optional_team9(f"Optional Team 9 chat service failed during agent turn: {response.text}")
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["status"] == "processed"

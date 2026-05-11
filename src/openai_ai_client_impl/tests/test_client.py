@@ -36,13 +36,16 @@ class _Response:
 
 
 class _Completions:
-    def __init__(self, responses: list[_Response]) -> None:
+    def __init__(self, responses: list[_Response | Exception]) -> None:
         self._responses = responses
         self.calls: list[dict[str, Any]] = []
 
     def create(self, **kwargs: Any) -> _Response:
         self.calls.append(kwargs)
-        return self._responses.pop(0)
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 class _Chat:
@@ -51,7 +54,7 @@ class _Chat:
 
 
 class _OpenAIStub:
-    def __init__(self, responses: list[_Response]) -> None:
+    def __init__(self, responses: list[_Response | Exception]) -> None:
         self.completions = _Completions(responses)
         self.chat = _Chat(self.completions)
 
@@ -73,6 +76,19 @@ def test_send_message_uses_mocked_provider() -> None:
 
     assert client.send_message("hello", {"container": "bucket"}) == "done"
     assert provider.completions.calls[0]["messages"][1] == {"role": "user", "content": "hello"}
+
+
+def test_send_message_retries_transient_provider_failure() -> None:
+    provider = _OpenAIStub([RuntimeError("temporary outage"), _response(_Message(content=" recovered "))])
+    client = OpenAIAIClient(
+        api_key="test-key",
+        client=provider,  # type: ignore[arg-type]
+        retry_attempts=2,
+        retry_backoff_seconds=0,
+    )
+
+    assert client.send_message("hello") == "recovered"
+    assert len(provider.completions.calls) == 2
 
 
 def test_tool_loop_executes_real_handler_and_returns_final_text() -> None:

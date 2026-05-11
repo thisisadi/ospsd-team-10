@@ -3,7 +3,8 @@
 import logging
 import os
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from openai_ai_client_impl.client import OpenAIAIClient
@@ -108,24 +109,33 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
     return registry
 
 
+def initialize_app_state(app: FastAPI) -> None:
+    """Initialize shared runtime clients from environment-backed configuration."""
+    logger.info("Initializing application state")
+
+    app.state.storage_client = create_storage_client()
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        msg = "Missing OPENAI_API_KEY"
+        raise RuntimeError(msg)
+
+    app.state.ai_client = OpenAIAIClient(api_key=api_key)
+
+    logger.info("Application state initialized")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """FastAPI lifespan hook replacing deprecated startup events."""
+    initialize_app_state(app)
+    yield
+
+
 # ---- Startup ----
 def setup_startup(app: FastAPI) -> None:
-    """Configure Prometheus metrics and attach middleware to the app."""
-
-    @app.on_event("startup")
-    def startup() -> None:
-        logger.info("Initializing application state")
-
-        app.state.storage_client = create_storage_client()
-
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            msg = "Missing OPENAI_API_KEY"
-            raise RuntimeError(msg)
-
-        app.state.ai_client = OpenAIAIClient(api_key=api_key)
-
-        logger.info("Application state initialized")
+    """Retained for tests/backward compatibility; startup is handled by lifespan."""
+    _ = app
 
 
 # ---- Routes ----
@@ -143,12 +153,12 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Cloud Storage Service",
         description="HTTP API for cloud storage with OAuth 2.0 authorization code flow.",
+        lifespan=lifespan,
     )
 
     app.add_middleware(SessionMiddleware, secret_key=session_secret_key())
 
     setup_metrics(app)
-    setup_startup(app)
     setup_routes(app)
 
     return app

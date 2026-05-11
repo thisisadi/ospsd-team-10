@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Protocol
 
+import httpx
 from http_chat_client_impl.client import HttpChatClient
 
 
@@ -68,3 +69,31 @@ def test_send_message_uses_single_request_call(monkeypatch: MonkeyPatchLike) -> 
     client = HttpChatClient()
     assert client.send_message("C1", "hello") == "m-abc"
     assert len(calls) == 1
+
+
+def test_send_message_retries_transient_network_failure(monkeypatch: MonkeyPatchLike) -> None:
+    monkeypatch.setenv("CHAT_SERVICE_BASE_URL", "https://chat.example.com")
+    monkeypatch.setenv("CHAT_SESSION_ID", "session-123")
+    calls = 0
+
+    def _request(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        _ = (args, kwargs)
+        if calls == 1:
+            request = httpx.Request("POST", "https://chat.example.com/messages")
+            msg = "temporary network failure"
+            raise httpx.ConnectError(msg, request=request)
+        return SimpleNamespace(
+            status_code=200,
+            content=b'{"message_id":"m-retry","channel":"C1","text":"hello"}',
+        )
+
+    monkeypatch.setattr(
+        "http_chat_client_impl.client.OpenApiClient.get_httpx_client",
+        lambda self: SimpleNamespace(request=_request),  # noqa: ARG005
+    )
+
+    client = HttpChatClient(retry_attempts=2, retry_backoff_seconds=0)
+    assert client.send_message("C1", "hello") == "m-retry"
+    assert calls == 2

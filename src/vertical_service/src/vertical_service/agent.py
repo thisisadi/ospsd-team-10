@@ -13,6 +13,43 @@ from typing import Any, Literal, Protocol, cast
 from cloud_storage_api import CloudStorageClient
 from cloud_storage_api.exceptions import StorageBackendError
 from cloud_storage_api.models import ObjectInfo
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+
+class CreateStorageContainerArgs(BaseModel):
+    """Validated args for the create_storage_container tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    container: str | None = Field(
+        default=None,
+        description="Container or bucket name to create. Defaults to active container.",
+    )
+
+
+class UploadTextAsFileArgs(BaseModel):
+    """Validated args for the upload_text_as_file tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    object_key: str = Field(description="Object key/path for the file.", min_length=1)
+    text: str = Field(description="Text content to upload.")
+
+
+class ListStorageFilesArgs(BaseModel):
+    """Validated args for the list_storage_files tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prefix: str = Field(default="", description="Key prefix filter; empty string lists all keys.")
+
+
+class ObjectKeyArgs(BaseModel):
+    """Validated args for tools that operate on a single object key."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    object_key: str = Field(description="Object key or path in the container.", min_length=1)
 
 
 class AIClient(Protocol):
@@ -112,16 +149,7 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "create_storage_container",
                 "description": "Create a storage container/bucket if the provider supports it.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "container": {
-                            "type": "string",
-                            "description": "Container or bucket name to create. Defaults to active container.",
-                        },
-                    },
-                    "required": [],
-                },
+                "parameters": CreateStorageContainerArgs.model_json_schema(),
             },
         },
         {
@@ -129,20 +157,7 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "upload_text_as_file",
                 "description": "Create or overwrite a text file in storage.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "object_key": {
-                            "type": "string",
-                            "description": "Object key/path for the file.",
-                        },
-                        "text": {
-                            "type": "string",
-                            "description": "Text content to upload.",
-                        },
-                    },
-                    "required": ["object_key", "text"],
-                },
+                "parameters": UploadTextAsFileArgs.model_json_schema(),
             },
         },
         {
@@ -150,16 +165,7 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "list_storage_files",
                 "description": "List object keys in the storage container matching an optional prefix.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "prefix": {
-                            "type": "string",
-                            "description": "Key prefix filter; empty string lists all keys.",
-                        },
-                    },
-                    "required": [],
-                },
+                "parameters": ListStorageFilesArgs.model_json_schema(),
             },
         },
         {
@@ -167,16 +173,7 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "get_storage_file_info",
                 "description": "Return metadata for one object in storage.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "object_key": {
-                            "type": "string",
-                            "description": "Object key or path in the container.",
-                        },
-                    },
-                    "required": ["object_key"],
-                },
+                "parameters": ObjectKeyArgs.model_json_schema(),
             },
         },
         {
@@ -184,19 +181,15 @@ def storage_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "summarize_storage_file",
                 "description": "Download and summarize a stored file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "object_key": {
-                            "type": "string",
-                            "description": "Object key to summarize.",
-                        },
-                    },
-                    "required": ["object_key"],
-                },
+                "parameters": ObjectKeyArgs.model_json_schema(),
             },
         },
     ]
+
+
+def _validation_error_payload(exc: ValidationError) -> str:
+    """Serialize tool-argument validation failures for the model."""
+    return json.dumps({"error": "invalid tool arguments", "details": exc.errors()})
 
 
 def _make_tool_handler(  # noqa: C901, PLR0915
@@ -208,8 +201,12 @@ def _make_tool_handler(  # noqa: C901, PLR0915
     """Build the storage tool dispatcher."""
 
     def _create_container(args: dict[str, Any]) -> str:
-        target_container = args.get("container", container)
-        if not isinstance(target_container, str) or not target_container:
+        try:
+            parsed = CreateStorageContainerArgs.model_validate(args)
+        except ValidationError as exc:
+            return _validation_error_payload(exc)
+        target_container = parsed.container or container
+        if not target_container:
             return json.dumps({"error": "container must be a non-empty string"})
 
         # Support provider-specific extension methods when available.
@@ -240,12 +237,12 @@ def _make_tool_handler(  # noqa: C901, PLR0915
         return json.dumps({"error": "active storage provider does not support container creation"})
 
     def _upload_text(args: dict[str, Any]) -> str:
-        object_key = args.get("object_key", "")
-        text = args.get("text", "")
-        if not isinstance(object_key, str) or not object_key:
-            return json.dumps({"error": "object_key is required"})
-        if not isinstance(text, str):
-            return json.dumps({"error": "text must be a string"})
+        try:
+            parsed = UploadTextAsFileArgs.model_validate(args)
+        except ValidationError as exc:
+            return _validation_error_payload(exc)
+        object_key = parsed.object_key
+        text = parsed.text
 
         payload = text.encode("utf-8")
 
@@ -285,26 +282,31 @@ def _make_tool_handler(  # noqa: C901, PLR0915
         return json.dumps({"error": "active storage provider does not support upload"})
 
     def _list_files(args: dict[str, Any]) -> str:
-        prefix = args.get("prefix", "") if isinstance(args.get("prefix"), str) else ""
-        files = storage.list_files(container, prefix)
+        try:
+            parsed = ListStorageFilesArgs.model_validate(args)
+        except ValidationError as exc:
+            return _validation_error_payload(exc)
+        files = storage.list_files(container, parsed.prefix)
         return json.dumps([f.object_name for f in files], default=str)
 
     def _file_info(args: dict[str, Any]) -> str:
-        key = args.get("object_key", "")
-        if not isinstance(key, str) or not key:
-            return json.dumps({"error": "object_key is required"})
-        info = storage.get_file_info(container, key)
+        try:
+            parsed = ObjectKeyArgs.model_validate(args)
+        except ValidationError as exc:
+            return _validation_error_payload(exc)
+        info = storage.get_file_info(container, parsed.object_key)
         return json.dumps(_object_info_payload(info), default=str)
 
     def _summarize_file(args: dict[str, Any]) -> str:
-        key = args.get("object_key", "")
-        if not isinstance(key, str) or not key:
-            return json.dumps({"error": "object_key is required"})
+        try:
+            parsed = ObjectKeyArgs.model_validate(args)
+        except ValidationError as exc:
+            return _validation_error_payload(exc)
         result = summarize_and_send(
             ai_client=ai_client,
             storage=storage,
             container=container,
-            object_key=key,
+            object_key=parsed.object_key,
             send=None,
         )
         return json.dumps(result, default=str)

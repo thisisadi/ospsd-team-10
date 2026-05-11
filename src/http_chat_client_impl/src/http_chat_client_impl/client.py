@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -67,10 +68,12 @@ def _validation_error_message(*, parsed: object | None) -> str:
 class HttpChatClient(ChatClient):
     """HTTP client implementation for interacting with the chat service via OpenAPI."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, retry_attempts: int = 2, retry_backoff_seconds: float = 0.1) -> None:
         """Initialize the HTTP chat client."""
         self._api_client: OpenApiClient | None = None
         self._api_base: str = ""
+        self._retry_attempts = max(1, retry_attempts)
+        self._retry_backoff_seconds = max(0.0, retry_backoff_seconds)
 
     def _ensure_api(self, base_url: str) -> OpenApiClient:
         """Ensure API client is initialized for given base URL."""
@@ -82,18 +85,35 @@ class HttpChatClient(ChatClient):
             )
         return self._api_client
 
+    def _request_with_retries(self, client: OpenApiClient, *, session_id: str, channel: str, text: str) -> httpx.Response:
+        """Send a chat message with lightweight retry for transient network failures."""
+        last_error: httpx.RequestError | None = None
+        for attempt in range(self._retry_attempts):
+            try:
+                return client.get_httpx_client().request(
+                    method="post",
+                    url="/messages",
+                    headers={"Content-Type": "application/json", "X-Session-ID": session_id},
+                    json={"channel": channel, "text": text},
+                )
+            except httpx.RequestError as exc:
+                last_error = exc
+                if attempt == self._retry_attempts - 1:
+                    break
+                if self._retry_backoff_seconds:
+                    time.sleep(self._retry_backoff_seconds * (2**attempt))
+        if last_error is None:  # pragma: no cover - defensive; loop always runs at least once.
+            msg = "Chat request retry loop did not execute."
+            raise RuntimeError(msg)
+        raise last_error
+
     def send_message(self, channel: str, text: str) -> str:
         """Send a message to a given channel and return the message ID."""
         base_url, session_id = _read_required_env()
         client = self._ensure_api(base_url)
 
         try:
-            response = client.get_httpx_client().request(
-                method="post",
-                url="/messages",
-                headers={"Content-Type": "application/json", "X-Session-ID": session_id},
-                json={"channel": channel, "text": text},
-            )
+            response = self._request_with_retries(client, session_id=session_id, channel=channel, text=text)
         except httpx.RequestError as exc:
             network_detail = f"{MSG_NETWORK} ({type(exc).__name__})."
             raise ChatServiceError(network_detail) from exc

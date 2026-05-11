@@ -23,6 +23,7 @@ uv run pytest --cov
 ```
 
 Explain that pytest includes unit, integration, and black-box e2e tests; live cloud/chat tests skip unless credentials are configured.
+Call out that the final run should show 88%+ coverage and zero Ruff/mypy failures.
 
 ## 3. App Functionality
 
@@ -61,6 +62,7 @@ Show `src/vertical_service/src/vertical_service/agent.py`:
 - `run_agent_turn(...)`
 
 Explain the flow: operator prompt -> OpenAI tool call -> storage action -> tool result -> final response.
+Mention extra credit: tool schemas come from Pydantic models, and the OpenAI adapter retries transient provider failures.
 
 ## 6. Cross-Vertical Integration
 
@@ -89,6 +91,7 @@ curl -s https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics | grep vertical_se
 ```
 
 Point out labels for `endpoint`, `method`, `status`, and `failure_kind`.
+Generate both a 4xx and 5xx locally if time allows, then show `failure_kind="domain"` and `failure_kind="infrastructure"` in `/metrics`.
 
 ## 8. CircleCI Walkthrough
 

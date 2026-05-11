@@ -59,6 +59,7 @@ class AIClient(ABC):
 - **`send_message`** — single-turn completion with optional context JSON injected into the system prompt
 - **`run_chat_with_tools`** — multi-turn loop that executes tool calls and feeds results back to the model until it responds with text (up to 8 rounds by default)
 - Reads `OPENAI_API_KEY` and `OPENAI_MODEL` from environment variables — never hardcoded
+- Retries lightweight transient provider failures before surfacing the final exception, with tests that avoid real network calls.
 
 ### Tool calling wired to domain actions (`agent.py`)
 
@@ -75,6 +76,8 @@ The `/agent` route uses `run_chat_with_tools` with five typed storage tools:
 The agent also supports a direct `/summarize <key>` command that bypasses the tool loop for single-step summarization.
 
 Tool results are JSON-serialized and fed back to the model as `tool` role messages. Errors from the storage layer (`StorageBackendError`) are caught and returned as structured JSON so the model can reason about failures.
+
+Tool arguments are modeled with Pydantic (`CreateStorageContainerArgs`, `UploadTextAsFileArgs`, `ListStorageFilesArgs`, and `ObjectKeyArgs`). The OpenAI tool schemas are generated from those models, and handlers validate model-provided arguments before touching storage.
 
 ### Prompt routing
 
@@ -115,6 +118,7 @@ This interface abstracts Slack (Team 9), Discord (Team 8), and Telegram (Team 4)
 - `send_message` wraps text in a `SendMessageRequest` and POSTs to Team 9's `/messages` endpoint
 - `check_health` GETs Team 9's `/health` endpoint — returns `False` if the service is unreachable
 - Handles auth errors (401), validation errors (422), and network failures gracefully
+- Retries transient network failures around outbound chat sends with a bounded retry count.
 - Auto-registers itself as the active chat client on import via `_register_default()`
 
 ### Agent integration

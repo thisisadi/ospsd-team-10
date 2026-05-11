@@ -73,6 +73,10 @@ resource "aws_apprunner_service" "vertical_service" {
           AWS_REGION       = var.aws_region
           STORAGE_PROVIDER = var.storage_provider
         }
+
+        # Production TODO: add runtime_environment_secrets for OPENAI_API_KEY,
+        # SESSION_SECRET_KEY, OAuth credentials, chat session ids, and provider
+        # credentials through AWS Secrets Manager or SSM Parameter Store.
       }
     }
   }
