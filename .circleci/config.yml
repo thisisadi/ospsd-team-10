@@ -7,8 +7,6 @@ jobs:
     working_directory: ~/project
     steps:
       - checkout
-      - setup_remote_docker:
-          docker_layer_caching: true
 
       - run:
           name: Install uv and add to PATH
@@ -35,6 +33,21 @@ jobs:
             uv run mypy --version
             uv run pytest --version
             uv run coverage --version
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  docker_publish:
+    docker:
+      - image: cimg/python:3.12
+    working_directory: ~/project
+    steps:
+      - attach_workspace:
+          at: .
+      - setup_remote_docker:
+          docker_layer_caching: true
 
       - run:
           name: Install AWS CLI
@@ -73,11 +86,6 @@ jobs:
             docker push \
             396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:$CIRCLE_SHA1
 
-      - persist_to_workspace:
-          root: .
-          paths:
-            - .
-
   lint:
     docker:
       - image: cimg/python:3.12
@@ -103,7 +111,6 @@ jobs:
           name: MyPy (strict)
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
             uv run mypy .
 
   test_unit_integration:
@@ -122,7 +129,6 @@ jobs:
           name: Run unit + integration tests (skip e2e)
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
             uv run pytest -m "not e2e and not team9_chat" \
               --junitxml=test-results/unit_integration/junit.xml -v \
               --cov=vertical_adapter \
@@ -159,7 +165,6 @@ jobs:
           name: Run Team 9 + agent integration test when chat env vars exist
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src:$(pwd)/src/http_chat_client_impl/src:$(pwd)/src/chat_client_api/src:$(pwd)/src/chat_client_service_api_client/src:$(pwd)/src/ai_client_api/src:$(pwd)/src/openai_ai_client_impl/src
             if [ -n "${CHAT_SERVICE_BASE_URL}" ] && [ -n "${CHAT_SESSION_ID}" ] && [ -n "${INTEGRATION_AGENT_CHANNEL_ID}" ]; then
               echo "Team 9 chat env vars detected. Running team9_chat integration test..."
               uv run pytest -m "team9_chat" \
@@ -192,7 +197,6 @@ jobs:
           name: Run e2e tests only if AWS env vars exist
           command: |
             source .venv/bin/activate
-            export PYTHONPATH=$(pwd)/src/vertical_service_api_client/src:$(pwd)/src/vertical_adapter/src:$(pwd)/src/vertical_service/src:$(pwd)/src/vertical_impl/src
             if [ -n "${AWS_S3_BUCKET}" ] && [ -n "${AWS_ACCESS_KEY_ID}" ] && [ -n "${AWS_SECRET_ACCESS_KEY}" ]; then
               echo "AWS env vars detected. Running e2e tests..."
               uv run pytest -m "e2e" \
@@ -269,10 +273,27 @@ workflows:
           requires: [test_unit_integration]
       - test_e2e_optional:
           requires: [test_unit_integration]
+      - docker_publish:
+          requires:
+            - lint
+            - typecheck
+            - test_unit_integration
+          filters:
+            branches:
+              only: main
       - deploy_render_hook:
-          requires: [test_unit_integration]
+          requires:
+            - lint
+            - typecheck
+            - test_unit_integration
+          filters:
+            branches:
+              only: main
       - deploy_docs:
-          requires: [test_unit_integration]
+          requires:
+            - lint
+            - typecheck
+            - test_unit_integration
           filters:
             branches:
               only: main

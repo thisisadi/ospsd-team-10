@@ -23,6 +23,7 @@ from vertical_service.routes import agent, auth, health, storage
 
 logger = logging.getLogger(__name__)
 HTTP_BAD_REQUEST = 400
+HTTP_INTERNAL_SERVER_ERROR = 500
 
 
 # ---- Metrics setup ----
@@ -33,28 +34,28 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
     request_count = Counter(
         "vertical_service_requests_total",
         "Total HTTP requests.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status"],
         registry=registry,
     )
 
     success_count = Counter(
         "vertical_service_success_total",
         "Total successful HTTP requests.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status"],
         registry=registry,
     )
 
     failure_count = Counter(
         "vertical_service_failure_total",
         "Total failed HTTP requests.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status", "failure_kind"],
         registry=registry,
     )
 
     request_latency = Histogram(
         "vertical_service_request_latency_seconds",
         "HTTP request latency in seconds.",
-        ["endpoint", "method"],
+        ["endpoint", "method", "status"],
         registry=registry,
     )
 
@@ -71,19 +72,32 @@ def setup_metrics(app: FastAPI) -> CollectorRegistry:
             response = await call_next(request)
             status_code = response.status_code
         except Exception:
-            request_count.labels(endpoint=endpoint, method=method).inc()
-            failure_count.labels(endpoint=endpoint, method=method).inc()
-            request_latency.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start)
+            status = "500"
+            request_count.labels(endpoint=endpoint, method=method, status=status).inc()
+            failure_count.labels(
+                endpoint=endpoint,
+                method=method,
+                status=status,
+                failure_kind="infrastructure",
+            ).inc()
+            request_latency.labels(endpoint=endpoint, method=method, status=status).observe(time.perf_counter() - start)
             raise
 
-        request_count.labels(endpoint=endpoint, method=method).inc()
+        status = str(status_code)
+        request_count.labels(endpoint=endpoint, method=method, status=status).inc()
 
         if status_code < HTTP_BAD_REQUEST:
-            success_count.labels(endpoint=endpoint, method=method).inc()
+            success_count.labels(endpoint=endpoint, method=method, status=status).inc()
         else:
-            failure_count.labels(endpoint=endpoint, method=method).inc()
+            failure_kind = "domain" if status_code < HTTP_INTERNAL_SERVER_ERROR else "infrastructure"
+            failure_count.labels(
+                endpoint=endpoint,
+                method=method,
+                status=status,
+                failure_kind=failure_kind,
+            ).inc()
 
-        request_latency.labels(endpoint=endpoint, method=method).observe(time.perf_counter() - start)
+        request_latency.labels(endpoint=endpoint, method=method, status=status).observe(time.perf_counter() - start)
 
         return response
 

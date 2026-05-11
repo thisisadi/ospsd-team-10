@@ -73,6 +73,10 @@ def test_metrics_middleware_failure_path(monkeypatch: pytest.MonkeyPatch) -> Non
     with TestClient(app) as client, pytest.raises(RuntimeError, match="boom"):
         client.get("/boom")
 
+    metrics = TestClient(app).get("/metrics")
+    assert 'failure_kind="infrastructure"' in metrics.text
+    assert 'status="500"' in metrics.text
+
 
 def test_to_http_unexpected_exception_maps_to_500() -> None:
     err = storage_routes._to_http(RuntimeError("unexpected"))

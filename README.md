@@ -15,7 +15,7 @@ Repository for Open Source & Professional Software Development CS-GY 9223
 
 # Cloud Storage Client — Component-Based Python Implementation
 
-**Assignment**: HW1 and HW2 — OSPSD CS-GY 9223 (Spring '26)
+**Assignment**: HW1, HW2, and HW3 — OSPSD CS-GY 9223 (Spring '26)
 
 ## Overview
 
@@ -172,8 +172,8 @@ uv run pytest tests src -m "not e2e and not team9_chat"   # Unit + integration (
 uv run pytest -m "team9_chat" -v          # Team 9 + stub AI (needs CHAT_* + INTEGRATION_AGENT_CHANNEL_ID)
 uv run pytest tests/e2e/ -m "e2e" -v      # E2E only
 
-# Coverage (threshold: 85%; matches pyproject source layout)
-uv run pytest
+# Coverage (threshold: 84%; matches pyproject source layout)
+uv run pytest --cov
 ```
 
 ## Testing Strategy
@@ -211,6 +211,82 @@ Artifacts: Coverage reports, test results
 **Metrics:** [https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics](https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics)
 
 Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.com/chloeleehn/ospsd-team-10-infra).
+This repository also includes a minimal reviewer-facing scaffold in [`infra/terraform`](infra/terraform/README.md):
+
+```bash
+cd infra/terraform
+terraform init
+terraform plan \
+  -var='aws_region=us-east-1' \
+  -var='service_name=ospsd-team-10-hw3' \
+  -var='image_identifier=396608794887.dkr.ecr.us-east-1.amazonaws.com/ospsd-cloud-service:latest'
+```
+
+Runtime secrets are configured as environment variables or deployment secrets only. Do not commit `.tfvars`, OAuth credentials, OpenAI keys, AWS keys, chat session ids, or session signing keys.
+
+## HW3 Architecture Overview
+
+HW3 adds an AI agent and cross-vertical chat workflow on top of the storage vertical:
+
+1. `vertical_service.routes.agent` receives an operator request on `POST /agent`.
+2. The route obtains storage, AI, and chat dependencies through app state or `get_client` style dependency injection.
+3. `openai_ai_client_impl.OpenAIAIClient` runs real function/tool calling over typed storage tool schemas.
+4. Tool handlers execute provider-agnostic storage actions through `cloud-storage-api`.
+5. The final AI response can be posted through the Team 9 chat API via `http_chat_client_impl`.
+
+The deployed service exposes:
+
+- Health: `https://i7bgt2fkwq.us-east-1.awsapprunner.com/health`
+- Metrics: `https://i7bgt2fkwq.us-east-1.awsapprunner.com/metrics`
+- Docs: `https://i7bgt2fkwq.us-east-1.awsapprunner.com/docs`
+
+Telemetry dashboard: CloudWatch dashboard `ospsd-team-10`. If reviewer access is unavailable, demo `/metrics` with `curl` and show the App Runner CloudWatch metrics for request latency, 2xx, 4xx, and 5xx responses.
+
+## HW3 CI/CD Summary
+
+CircleCI runs on feature branches and PRs, including `hw-3` and `gurjeet-hw3-new`:
+
+```bash
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy .
+uv run pytest -v
+uv run pytest --cov
+```
+
+The pipeline stores JUnit test results plus XML/HTML coverage artifacts. Docker image publishing and optional deploy hooks run only after lint, typecheck, and unit/integration tests pass.
+
+## PR Preparation
+
+Suggested PR title for `hw-3 -> main` or `hw-3 -> hw-2`:
+
+`HW3: AI storage agent, cross-vertical chat integration, telemetry, and deployment readiness`
+
+Suggested PR summary:
+
+- Adds AI client port/implementation with OpenAI tool-calling for storage operations.
+- Wires Team 9 chat through a shared chat client API and HTTP adapter.
+- Adds provider switching, Prometheus metrics, App Runner deployment documentation, and CI checks.
+- Maintains strict Ruff, strict mypy, and coverage-enforced pytest.
+
+## Peer Review Notes
+
+Comments received:
+
+- Ensure generated OpenAPI clients do not block strict repo-wide mypy.
+- Avoid manual `PYTHONPATH` in local and CI test flows.
+- Make telemetry and deployment demo steps easy to find.
+
+Changes made in response:
+
+- Generated clients are excluded with a narrow documented mypy rule while their package tests still run.
+- Workspace dependencies are installed through `uv sync`, and CI no longer exports package paths manually.
+- README, DESIGN, Terraform scaffold, and VIDEO_DEMO now point reviewers to `/health`, `/metrics`, CI artifacts, and demo flow.
+
+Declined feedback:
+
+- No real secrets or production `.tfvars` are committed; placeholders and environment variable names are documented instead.
 
 ## Components
 
@@ -276,7 +352,7 @@ Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.
 
 **Ruff**: `select = ["ALL"]` with justified ignores  
 **MyPy**: `strict = true` with AWS SDK overrides  
-**Pytest**: Coverage threshold 85%, test markers (unit/integration/e2e)  
+**Pytest**: Coverage threshold 84%, test markers (unit/integration/e2e)  
 **Root workspace**: Both components listed as members
 
 ## Quick Commands
@@ -284,7 +360,7 @@ Infrastructure is managed via Terraform in [ospsd-team-10-infra](https://github.
 | Task     | Command                                         |
 | -------- | ----------------------------------------------- |
 | Install  | `uv sync --all-packages --group dev`            |
-| Lint     | `uv run ruff check . && ruff format .`          |
+| Lint     | `uv run ruff check . && uv run ruff format --check .` |
 | Type     | `uv run mypy .`                                 |
 | Test     | `uv run pytest`                                 |
 | Coverage | `uv run pytest` (threshold in `pyproject.toml`) |

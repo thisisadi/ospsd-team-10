@@ -167,12 +167,12 @@ A middleware in `app.py` instruments every HTTP request:
 
 | Metric                                     | Type      | Labels               |
 | ------------------------------------------ | --------- | -------------------- |
-| `vertical_service_requests_total`          | Counter   | `endpoint`, `method` |
-| `vertical_service_success_total`           | Counter   | `endpoint`, `method` |
-| `vertical_service_failure_total`           | Counter   | `endpoint`, `method` |
-| `vertical_service_request_latency_seconds` | Histogram | `endpoint`, `method` |
+| `vertical_service_requests_total`          | Counter   | `endpoint`, `method`, `status` |
+| `vertical_service_success_total`           | Counter   | `endpoint`, `method`, `status` |
+| `vertical_service_failure_total`           | Counter   | `endpoint`, `method`, `status`, `failure_kind` |
+| `vertical_service_request_latency_seconds` | Histogram | `endpoint`, `method`, `status` |
 
-Success is defined as HTTP status < 400. Failure covers both domain errors (4xx) and infrastructure errors (5xx), satisfying the rubric requirement to distinguish them via labels.
+Success is defined as HTTP status < 400. Failure labels distinguish domain errors (`failure_kind="domain"` for 4xx) from infrastructure errors (`failure_kind="infrastructure"` for 5xx and uncaught exceptions).
 
 The `/metrics` endpoint exposes all data in Prometheus format, scraped from the live deployed service — not local stdout.
 
@@ -204,6 +204,8 @@ Infrastructure lives in a dedicated repo ([ospsd-team-10-infra](https://github.c
 
 Running `terraform apply` from a clean state produces the full deployed environment. Secrets (API keys, OAuth credentials) are loaded from environment variables — never baked into source control or container images.
 
+This app repo also includes a minimal Terraform scaffold under `infra/terraform/` for reviewer visibility. It defines the expected App Runner service, ECR access role, instance role, `/health` check, and outputs for service, health, and metrics URLs. Real secret values remain in deployment configuration or secrets manager references only.
+
 ### CI/CD pipelines
 
 Two separate CircleCI pipelines:
@@ -213,7 +215,7 @@ Two separate CircleCI pipelines:
 1. Install deps, lint (ruff), type check (mypy)
 2. Unit + integration tests, coverage report
 3. E2E tests (if AWS credentials present)
-4. Build Docker image, tag with `latest` + commit SHA, push to ECR
+4. Build Docker image, tag with `latest` + commit SHA, push to ECR only after checks pass on `main`
 5. App Runner auto-deploys on new `latest` tag
 
 **Infra pipeline** (`ospsd-team-10-infra`):
@@ -305,6 +307,43 @@ S3CloudStorageClient  →  AWS S3
 | E2E              | `tests/e2e/`                             | Real S3 when credentials set; black-box assertions on user-visible behavior |
 
 Coverage threshold: **85%** enforced in CI via `pyproject.toml`. Intentionally untestable lines marked `# pragma: no cover`.
+
+The local enforced threshold is **84%** in `pyproject.toml`; current measured coverage is above that threshold. CI stores both JUnit XML and coverage XML/HTML artifacts.
+
+---
+
+## Dependency injection plan
+
+- Storage: provider selection is centralized in `vertical_service.provider_switching.factory.create_storage_client`; app routes receive the selected `CloudStorageClient` through app state.
+- AI: the service initializes an `AIClient` implementation at startup from environment configuration, and tests override it with fakes.
+- Chat: `chat_client_api.get_client()` returns the registered `ChatClient`; `http_chat_client_impl` registers the Team 9 HTTP adapter on import.
+- Generated clients: OpenAPI clients stay behind adapter packages so route and agent code do not depend on generated response classes.
+
+## Adapting existing code to the shared vertical interface
+
+Team 10's older storage API is preserved through `vertical_api.Client`, but HW3 workflows use the published `cloud-storage-api` contract for shared storage behavior. The adaptation plan is:
+
+1. Keep provider-specific S3/GCP details in implementation packages.
+2. Map provider results into provider-agnostic `ObjectInfo` and storage exceptions.
+3. Keep service, agent, and demo workflows typed against `CloudStorageClient`.
+4. Preserve `vertical_adapter` for backward-compatible HTTP usage while new shared-provider demos use `cloud-storage-api`.
+
+## Video demo checklist
+
+The video should show:
+
+1. `git branch --show-current` on `gurjeet-hw3-new`.
+2. Local checks: `uv sync`, ruff, mypy, pytest, coverage.
+3. `/health` returning 200 and `/metrics` returning Prometheus text.
+4. Provider switching with `STORAGE_PROVIDER=mock`, `s3`, or `gcp`.
+5. AI tool-calling: user request triggers a storage tool and returns an AI answer.
+6. Cross-vertical chat: AI response is sent through Team 9 chat.
+7. CircleCI workflow and stored artifacts.
+8. Terraform scaffold or shared infra repo plan/apply output.
+
+## Peer review response
+
+Feedback received focused on generated-client mypy noise, manual import path setup, and demo clarity. The repo now keeps generated-client mypy exclusions narrow and documented, relies on workspace package installation instead of manual `PYTHONPATH`, and documents health, metrics, CI, IaC, and demo steps directly in README/DESIGN/VIDEO_DEMO. Secret-bearing Terraform variables and real credentials are intentionally omitted from source.
 
 ---
 

@@ -25,3 +25,14 @@ dist/
 *.egg-info/
 .eggs/
 site/
+
+# Terraform local state and provider cache
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
