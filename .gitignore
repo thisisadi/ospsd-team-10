@@ -1,3 +1,5 @@
+.DS_Store
+
 .pytest_cache/
 .coverage
 htmlcov/
@@ -8,6 +10,7 @@ htmlcov/
 # Python cache files
 __pycache__/
 *.py[cod]
+*.pyc
 
 # Environment variables
 .env
@@ -20,3 +23,5 @@ token.json
 build/
 dist/
 *.egg-info/
+.eggs/
+site/

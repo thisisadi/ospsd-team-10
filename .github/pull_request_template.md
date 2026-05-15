@@ -19,8 +19,8 @@
 - [ ] 🔨 Build / tooling
 
 ## Impacted Areas
-- [ ] `cloud_storage_client_api`
-- [ ] `s3_client_impl`
+- [ ] `vertical_api`
+- [ ] `vertical_impl`
 - [ ] Documentation
 - [ ] Tests
 - [ ] Tooling / CI
@@ -48,7 +48,7 @@ uv run ruff format --check .
 - [ ] Security / secrets handled correctly (no hardcoded credentials)
 - [ ] Performance impact acceptable
 - [ ] Docs updated for user-facing changes
-- [ ] Coverage threshold (85%) maintained
+- [ ] Coverage threshold from root `pyproject.toml` (`[tool.coverage.report]` `fail_under`) maintained in CI
 
 ## Breaking Changes (skip if none)
 1. Impact:
